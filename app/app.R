@@ -7,7 +7,7 @@ library(dplyr)
 
 auth_cache <- "secrets"
 
-gs4_auth(cache = auth_cache)
+gs4_auth(email = TRUE, cache = auth_cache)
 secret_sheet <- "14qI8A51Op2Ri3yfwD1t2AQZ1fxki-KUFb7_EEyvO4Lo"
 
 data <- NULL
