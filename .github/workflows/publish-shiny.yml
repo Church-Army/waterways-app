@@ -21,7 +21,7 @@ jobs:
 
       - name: Publish app to shinyapps.io
         run: |
-          Rscript -e "options(gargle_oauth_email = 'davidpg.lovell@gmail.com', gargle_oauth_cache = 'app/secrets')"
+          Rscript -e "options(gargle_oauth_cache = 'app/secrets')"
           Rscript -e "googlesheets4::gs4_auth_configure(client = '${{secrets.GOOGLE_SHEETS_CLIENT_ID}}', api_key = '${{secrets.GOOGLE_SHEETS_SECRET}}')"
           Rscript -e "rsconnect::setAccountInfo(name='church-army', token='${{secrets.SHINYAPPS_TOKEN}}', secret='${{secrets.SHINYAPPS_SECRET}}')"
           Rscript -e "rsconnect::deployApp(appName = 'waterways-test', forceUpdate = TRUE)"
