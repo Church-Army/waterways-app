@@ -12,9 +12,6 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Quarto
-        uses: quarto-dev/quarto-actions/setup@v2
-
       # From https://github.com/r-lib/actions/tree/v2-branch/setup-r
       - name: Setup R
         uses: r-lib/actions/setup-r@v2
@@ -22,21 +19,7 @@ jobs:
       - name: Setup renv
         uses: r-lib/actions/setup-renv@v2
 
-      - name: Render 01
-        uses: quarto-dev/quarto-actions/render@v2
-        with:
-          to: html # If set, it will be equivalent to `quarto render --to html`
-          path: R/01_read-and-insert-descriptive-copy.qmd # By default, the current working dir is used i.e `quarto render .`
-
-      - name: Render 02
-        uses: quarto-dev/quarto-actions/render@v2
-        with:
-          to: html # If set, it will be equivalent to `quarto render --to html`
-          path: R/02_render-reports.qmd # By default, the current working dir is used i.e `quarto render .`
-
+      - name: Publish app to shinyapps.io
       - run: |
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-          git add .
-          git commit -m "Rendering quarto files in /R [GH action]"
-          git push
+          Rscript -e "rsconnect::setAccountInfo(name='church-army', token=${{secrets.SHINYAPPS_TOKEN}}, secret=${{secrets.SHINYAPPS_SECRET}})"
+          Rscript -e "rsconnect::deployApp(appName = 'waterways-test')"
