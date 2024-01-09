@@ -1,12 +1,7 @@
 on: push
-  branches: publish
+  branches: published
 
 name: Publish app to shinyapps.io
-
-# you need these permissions to publish to GitHub pages
-permissions:
-  contents: write
-  pages: write
 
 jobs:
   build-deploy:
