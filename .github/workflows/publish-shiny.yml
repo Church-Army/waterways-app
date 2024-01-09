@@ -21,5 +21,5 @@ jobs:
 
       - name: Publish app to shinyapps.io
         run: |
-          Rscript -e "rsconnect::setAccountInfo(name='church-army', token=${{secrets.SHINYAPPS_TOKEN}}, secret=${{secrets.SHINYAPPS_SECRET}})"
+          Rscript -e "rsconnect::setAccountInfo(name='church-army', token='${{secrets.SHINYAPPS_TOKEN}}', secret='${{secrets.SHINYAPPS_SECRET}}')"
           Rscript -e "rsconnect::deployApp(appName = 'waterways-test')"
