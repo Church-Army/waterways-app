@@ -1,0 +1,12 @@
+name: waterways-test
+title: waterways-test
+username: church-army
+account: church-army
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 10890899
+bundleId: 8124659
+url: https://church-army.shinyapps.io/waterways-test/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
