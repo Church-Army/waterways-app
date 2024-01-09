@@ -1,5 +1,5 @@
 on: push
-  branches: published
+branches: published
 
 name: Publish app to shinyapps.io
 
