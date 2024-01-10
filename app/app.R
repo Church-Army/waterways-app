@@ -31,7 +31,7 @@ server <- function(input, output) {
       text_to_show <- paste0("Error: ", error[["message"]])
     } else {
       text_to_show <- str_c("Succesfully reading a Google sheet with these column names:",
-                            names(data),
+                            str_c(names(data), collapse = " "),
                             collapse = "\n\n")
     }
     text_to_show
