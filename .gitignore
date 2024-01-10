@@ -4,8 +4,7 @@
 .httr-oauth
 .DS_Store
 .quarto
-
 # Ignore secrets, wherever they are
-app/secrets
 **gmail.com$
-secrets/
+app/secrets
+secrets
