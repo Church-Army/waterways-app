@@ -10,8 +10,7 @@ gs4_auth(email = TRUE, cache = auth_cache)
 secret_sheet <- "14qI8A51Op2Ri3yfwD1t2AQZ1fxki-KUFb7_EEyvO4Lo"
 
 data <- NULL
-data <- tryCatch(read_sheet(secret_sheet,),
-                 error = identity)
+data <- tryCatch(read_sheet(secret_sheet), error = identity)
 
 ui <- fluidPage(
   titlePanel("Random questions"),
@@ -30,7 +29,9 @@ server <- function(input, output) {
     if("error" %in% class(data)){
       text_to_show <- paste0("Error: ", error[["message"]])
     } else {
-      text_to_show <- names(data)
+      text_to_show <- str_c("Succesfully reading a Google sheet with these column names:",
+                            names(data),
+                            collapse = "\n\n")
     }
     text_to_show
   })
