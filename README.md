@@ -8,5 +8,6 @@ The app is published manually from a local repo, so the remote may well be out o
 
 - [x] Read from private Google Sheet via `googlesheets4`
 - [ ] Visualise test data
+- [ ] Design app interface
 - [ ] Enable data download as xlsx and/or csv file
  
