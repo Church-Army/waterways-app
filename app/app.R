@@ -1,6 +1,5 @@
 library(shiny)
 library(ggplot2)
-library(datasets)
 library(googlesheets4)
 library(here)
 library(dplyr)
