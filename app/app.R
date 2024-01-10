@@ -6,6 +6,7 @@ library(dplyr)
 library(stringr)
 library(carutools)
 library(janitor)
+library(lubridate)
 
 #### THIS CODE ALWAYS RUNS #####################################################
 
@@ -40,14 +41,24 @@ if(is.data.frame(data)){
   data <- tally_delimited_string(data, concerns)
 }
 
+all_months <-
+  c("January", "February", "March", "April", "May",
+    "June", "July", "August", "September", "October",
+    "November", "December")
+
 #### USER INTERFACE ############################################################
 
 ui <- fluidPage(
   titlePanel("Random questions"),
   sidebarLayout(
-    sidebarPanel(),
+    sidebarPanel(
+      checkboxGroupInput("months", "Months",
+                         choices  = all_months,
+                         selected = all_months)
+    ),
     mainPanel(
-      textOutput("test_text")
+      textOutput("test_text"),
+      tableOutput("test_table")
     )
   )
 )
@@ -74,6 +85,12 @@ server <- function(input, output) {
     text_to_show
 
     }) # /test_text
+
+  # test_table ----------------------------------------------------------------=
+  output$test_table <- renderTable({
+    data |>
+      filter(month %in% input$months)
+  })
 }
 
 #### RUN APP ###################################################################
