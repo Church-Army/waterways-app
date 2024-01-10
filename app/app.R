@@ -3,6 +3,7 @@ library(ggplot2)
 library(googlesheets4)
 library(here)
 library(dplyr)
+library(stringr)
 
 auth_cache <- "secrets"
 
