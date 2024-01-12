@@ -135,7 +135,7 @@ ui <- fluidPage(
            ),
              fluidRow(
                h2("Concerns raised so far this year:"),
-               plotOutput("concerns_plot", width = "90%")
+               plotOutput("concerns_plot", width = "90%", height = "600px")
                )
            )),
 
@@ -174,7 +174,14 @@ server <- function(input, output) {
                    names_prefix = "concern_",
                    names_to = "concern",
                    values_to = "identified") |>
-      summarise(count = sum(identified), .by = c(concern, month))
+
+      # NB currently we treat 1 or more occurrences of the same concerns within
+      # a month by the same chaplain as equivalent values, since a return could
+      # be daily or monthly. It's hard to get Google forms to allow people to tally
+      # occurrences ongoingly, so currently this seems like the most responsible way
+      # to report
+      summarise(occured = any(identified), .by = c(concern, email_address, month)) |>
+      summarise(count = sum(occured), .by = c(concern, month))
 
     ggplot(plot_data,
            aes(x = month, colour = concern, y = count)) +
@@ -191,7 +198,10 @@ server <- function(input, output) {
       theme_ca() +
       theme(
         text = element_text(size = 28)
-      )
+      ) +
+
+      ylab("Chaplains who encountered this issue") +
+      xlab("Month")
   })
   ##/ outputs for page 1 /
 
