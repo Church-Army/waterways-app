@@ -26,6 +26,12 @@ data <- tryCatch(read_sheet(secret_sheet), error = identity)
 
 if(is.data.frame(data)){
 
+  # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<#
+  ##############################################################################
+  ##    DELET THIS // DELET THIS // DELET THIS // DELET THIS // DELET THIS     #
+  data <- filter(data, month != "January")
+  ##############################################################################
+  # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
   ## Clean names and rename ----------------------------------------------------
 
   data <- clean_names(data)
@@ -86,7 +92,8 @@ if(is.data.frame(data)){
               .by = c(response_id, concern_category)) |>
 
     pivot_wider(names_from = concern_category,
-                values_from = is_concern)
+                values_from = is_concern,
+                names_prefix = "concern_")
 
   generalised_data <-
     data |>
@@ -112,7 +119,7 @@ ui <- fluidPage(
                  style = "font-size:2em;"
              )
            ),
-             fluidRow()
+             fluidRow(plotOutput("concerns_plot"))
            )),
     tabPanel("Who are we talking to?"),
     tabPanel("What are we talking about?"),
@@ -136,6 +143,21 @@ server <- function(input, output) {
 
   output$total_general <- renderText({
     as.character(sum(data[["n_general"]], na.rm = TRUE))
+  })
+
+  output$concerns_plot <- renderPlot({
+
+    plot_data <-
+      generalised_data |>
+      pivot_longer(starts_with("concern_"),
+                   names_prefix = "concern_",
+                   names_to = "concern",
+                   values_to = "identified") |>
+      summarise(count = sum(identified), .by = c(concern, month))
+
+    ggplot(plot_data,
+           aes(x = month, colour = concern, y = count)) +
+      geom_line()
   })
   ##/ outputs for page 1 /
 
