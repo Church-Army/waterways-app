@@ -159,7 +159,8 @@ server <- function(input, output) {
 
     ggplot(plot_data,
            aes(x = month, colour = concern, y = count)) +
-      geom_line()
+      geom_line() +
+      theme_ca()
   })
   ##/ outputs for page 1 /
 
