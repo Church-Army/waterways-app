@@ -7,12 +7,15 @@ library(stringr)
 library(carutools)
 library(janitor)
 library(lubridate)
+library(fs)
 
 #### THIS CODE ALWAYS RUNS #####################################################
 
 # credentials and authentication -----------------------------------------------
 gs4_deauth()
-auth_cache <- if_else(isRunning(), "secrets", "app/secrets")
+
+is_app_dir <- file_exists(here(".appDir"))
+auth_cache <- "secrets"
 gs4_auth(email = TRUE, cache = auth_cache)
 
 # attempt to read sheet --------------------------------------------------------
