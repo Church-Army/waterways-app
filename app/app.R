@@ -58,7 +58,7 @@ ui <- fluidPage(tabsetPanel(
                        tableOutput("test_table"))
            )),
   tabPanel("Who are we talking to?"),
-  tabPanel("What are we talking about?"),
+  tabPanel("What are we talking about?", plotOutput("horizontal_bar_concerns")),
   tabPanel(
     "Download data",
     downloadButton("xlsx_download", "Download data")
