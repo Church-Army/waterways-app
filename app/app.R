@@ -110,6 +110,7 @@ p_size <- function(..., size = 1, em = TRUE) p(..., style = str_c("font-size:", 
 
 ui <- fluidPage(
   tabsetPanel(
+
     tabPanel("At a glance",
            fluidPage(
              fluidRow(
@@ -123,12 +124,16 @@ ui <- fluidPage(
            ),
              fluidRow(plotOutput("concerns_plot"))
            )),
+
     tabPanel("Who are we talking to?"),
+
     tabPanel("What are we talking about?"),
+
     tabPanel(
       "Download data",
       downloadButton("xlsx_download", "Download data")
     ),
+
     tabPanel("Detailed graphs and tables")
   )
 )
