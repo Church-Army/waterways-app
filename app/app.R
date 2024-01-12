@@ -48,21 +48,23 @@ all_months <-
 
 #### USER INTERFACE ############################################################
 
-ui <- fluidPage(
-  titlePanel("Random questions"),
-  sidebarLayout(
-    sidebarPanel(
-      checkboxGroupInput("months", "Months",
-                         choices  = all_months,
-                         selected = all_months)
-    ),
-    mainPanel(
-      textOutput("test_text"),
-      tableOutput("test_table")
-    )
-  )
-)
-
+ui <- fluidPage(tabsetPanel(
+  tabPanel("main_page",
+           sidebarLayout(
+             sidebarPanel(
+               checkboxGroupInput("months", "Months", choices  = all_months, selected = all_months)
+             ),
+             mainPanel(textOutput("test_text"),
+                       tableOutput("test_table"))
+           )),
+  tabPanel("Who are we talking to?"),
+  tabPanel("What are we talking about?"),
+  tabPanel(
+    "Download data",
+    downloadButton("xlsx_download", "Download data")
+  ),
+  tabPanel("Detailed graphs and tables")
+))
 #### SERVER ####################################################################
 
 server <- function(input, output) {
