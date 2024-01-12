@@ -12,7 +12,7 @@ library(lubridate)
 
 # credentials and authentication -----------------------------------------------
 gs4_deauth()
-auth_cache <- if_else(interactive(), "app/secrets", "secrets")
+auth_cache <- if_else(isRunning(), "secrets", "app/secrets")
 gs4_auth(email = TRUE, cache = auth_cache)
 
 # attempt to read sheet --------------------------------------------------------
