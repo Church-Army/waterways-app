@@ -26,14 +26,6 @@ data <- tryCatch(read_sheet(secret_sheet), error = identity)
 
 if(is.data.frame(data)){
 
-  # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<#
-  ##############################################################################
-  ##    DELET THIS // DELET THIS // DELET THIS // DELET THIS // DELET THIS     #
-  data <- filter(data, month != "January")
-  ##############################################################################
-  # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
-  ## Clean names and rename ----------------------------------------------------
-
   data <- clean_names(data)
 
   data <- rename(data,
@@ -44,7 +36,17 @@ if(is.data.frame(data)){
                  concerns     = which_of_the_following_concerns_were_identified_by_your_conversations,
                  comments     = do_you_have_any_other_comments_about_your_recent_interactions_that_you_would_like_to_share)
 
+  # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<#
+  ##############################################################################
+  ##    DELET THIS // DELET THIS // DELET THIS // DELET THIS // DELET THIS     #
+  data <- filter(data, month != "January")
+  ##############################################################################
+  # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+  ## Clean names and rename ----------------------------------------------------
+
+
   ## Tally counts from comma-delimited string columns (widening data) ----------
+
 
   data <- mutate(data, across(c(people, concerns), str_to_lower))
 
