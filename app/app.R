@@ -125,6 +125,8 @@ ui <- fluidPage(
 
 server <- function(input, output) {
 
+  ## outputs for page 1: -------------------------------------------------------
+
   output$total_meaningful <- renderText({
     as.character(sum(data[["n_meaningful"]], na.rm = TRUE))
   })
@@ -132,6 +134,8 @@ server <- function(input, output) {
   output$total_general <- renderText({
     as.character(sum(data[["n_general"]], na.rm = TRUE))
   })
+  ##/ outputs for page 1 /
+
 }
 
 #### RUN APP ###################################################################
