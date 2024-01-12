@@ -7,12 +7,20 @@ library(stringr)
 library(carutools)
 library(janitor)
 library(lubridate)
+library(fs)
+library(vroom)
+library(tidyr)
 
 #### THIS CODE ALWAYS RUNS #####################################################
 
+## Note to self: Could we have the form take counts of each concern raised?
+## Then we could meaningfully count things from month to month.
+
 # credentials and authentication -----------------------------------------------
 gs4_deauth()
-auth_cache <- if_else(interactive(), "app/secrets", "secrets")
+
+is_app_dir <- file_exists(here(".appDir"))
+auth_cache <- "secrets"
 gs4_auth(email = TRUE, cache = auth_cache)
 
 # attempt to read sheet --------------------------------------------------------
@@ -20,8 +28,6 @@ secret_sheet <- "14qI8A51Op2Ri3yfwD1t2AQZ1fxki-KUFb7_EEyvO4Lo"
 data <- tryCatch(read_sheet(secret_sheet), error = identity)
 
 if(is.data.frame(data)){
-
-  ## Clean names and rename ----------------------------------------------------
 
   data <- clean_names(data)
 
@@ -33,66 +39,181 @@ if(is.data.frame(data)){
                  concerns     = which_of_the_following_concerns_were_identified_by_your_conversations,
                  comments     = do_you_have_any_other_comments_about_your_recent_interactions_that_you_would_like_to_share)
 
+  # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<#
+  ##############################################################################
+  ##    DELET THIS // DELET THIS // DELET THIS // DELET THIS // DELET THIS     #
+  data <- filter(data, month != "January")
+  ##############################################################################
+  # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+  ## Clean names and rename ----------------------------------------------------
+
+
   ## Tally counts from comma-delimited string columns (widening data) ----------
+
 
   data <- mutate(data, across(c(people, concerns), str_to_lower))
 
   data <- tally_delimited_string(data, people)
   data <- tally_delimited_string(data, concerns)
+
+  data <- mutate(data, response_id = str_c("r_", row_number()))
+
+  ## Converting conversations to numeric ---------------------------------------
+
+  conversation_responses <- c("None", "One", "Two", "Three", "Four", "Five or more")
+
+  data <- mutate(
+    data,
+    across(c(n_meaningful, n_general),
+           \(x){
+             match(x, conversation_responses) - 1
+           }
+           )
+    )
+
+  ## Add month-level date-time marker
+
+  data <-
+    mutate(data,
+           month =
+             str_c(year(timestamp), match(month, month.name), "01",
+                   sep = "-") |>
+             ymd())
+
+  ## Adding concern group codes to data ----------------------------------------
+
+  concerns_categories <- vroom("data/concerns-categories.csv", delim = ",", col_types = "cc")
+
+  concerns <-
+
+    pivot_longer(data, starts_with("concerns_"),
+                 names_to = "concern", values_to = "is_concern") |>
+
+    select(response_id, concern, is_concern) |>
+
+    left_join(concerns_categories, by = c("concern")) |>
+
+    summarise(is_concern = any(is_concern),
+              .by = c(response_id, concern_category)) |>
+
+    pivot_wider(names_from = concern_category,
+                values_from = is_concern,
+                names_prefix = "concern_")
+
+  generalised_data <-
+    data |>
+    select(-starts_with("concern_")) |>
+    left_join(concerns, by = "response_id")
 }
 
-all_months <-
-  c("January", "February", "March", "April", "May",
-    "June", "July", "August", "September", "October",
-    "November", "December")
+
+## Miscellaneous helpers -------------------------------------------------------
+
+capitalise <- function(x){
+  first <- str_to_upper(str_sub(x, 1, 1))
+  rest  <- str_sub(x, 2, -1)
+  str_c(first, rest)
+}
 
 #### USER INTERFACE ############################################################
 
-ui <- fluidPage(tabsetPanel(
-  tabPanel("main_page",
-           sidebarLayout(
-             sidebarPanel(
-               checkboxGroupInput("months", "Months", choices  = all_months, selected = all_months)
-             ),
-             mainPanel(textOutput("test_text"),
-                       tableOutput("test_table"))
+p_size <- function(..., size = 1, em = TRUE) p(..., style = str_c("font-size:", size, if_else(em, "em", "px"), ";"))
+
+ui <- fluidPage(
+  tabsetPanel(
+
+    tabPanel("At a glance",
+           fluidPage(
+             fluidRow(
+               div(
+                 h1("So far this year:"),
+                 p("We have had over ",
+                   strong(textOutput("total_general", inline = TRUE)), " conversations and over",
+                   strong(textOutput("total_meaningful", inline = TRUE)), " meaningful conversations on Britain's Waterways."),
+                 style = "font-size:2em;"
+             )
+           ),
+             fluidRow(
+               h2("Concerns raised so far this year:"),
+               plotOutput("concerns_plot", width = "90%", height = "600px")
+               )
            )),
-  tabPanel("Who are we talking to?"),
-  tabPanel("What are we talking about?", plotOutput("horizontal_bar_concerns")),
-  tabPanel(
-    "Download data",
-    downloadButton("xlsx_download", "Download data")
-  ),
-  tabPanel("Detailed graphs and tables")
-))
+
+
+    tabPanel("Who are we talking to?"),
+
+    tabPanel("What are we talking about?"),
+
+    tabPanel(
+      "Download data",
+      downloadButton("xlsx_download", "Download data")
+    ),
+
+    tabPanel("Detailed graphs and tables")
+  )
+)
+
 #### SERVER ####################################################################
 
 server <- function(input, output) {
 
-  # test_text ------------------------------------------------------------------
-  output$test_text <- renderText({
+  ## outputs for page 1: -------------------------------------------------------
 
-    if("error" %in% class(data)){
-
-      text_to_show <- paste0("Error: ", error[["message"]])
-
-      } else {
-
-        text_to_show <-
-          str_c("Succesfully reading a Google sheet with these column names:",
-                str_c(names(data), collapse = " "),
-                collapse = "\n\n")
-      }
-
-    text_to_show
-
-    }) # /test_text
-
-  # test_table ----------------------------------------------------------------=
-  output$test_table <- renderTable({
-    data |>
-      filter(month %in% input$months)
+  output$total_meaningful <- renderText({
+    as.character(sum(data[["n_meaningful"]], na.rm = TRUE))
   })
+
+  output$total_general <- renderText({
+    as.character(sum(data[["n_general"]], na.rm = TRUE))
+  })
+
+  output$concerns_plot <- renderPlot({
+
+    plot_data <-
+      generalised_data |>
+      pivot_longer(starts_with("concern_"),
+                   names_prefix = "concern_",
+                   names_to = "concern",
+                   values_to = "identified") |>
+
+      # NB currently we treat 1 or more occurrences of the same concerns within
+      # a month by the same chaplain as equivalent values, since a return could
+      # be daily or monthly. It's hard to get Google forms to allow people to tally
+      # occurrences ongoingly, so currently this seems like the most responsible way
+      # to report
+      summarise(occured = any(identified), .by = c(concern, email_address, month)) |>
+      summarise(count = sum(occured), .by = c(concern, month))
+
+    ggplot(plot_data,
+           aes(x = month, colour = concern, y = count)) +
+
+      geom_line() +
+
+      scale_colour_discrete(
+        label = \(x){
+          capitalise(x) |>
+            str_replace_all("_", " ")
+        }
+      ) +
+
+      theme_ca() +
+      theme(
+        text = element_text(size = 28)
+      ) +
+
+      ylab("Chaplains who encountered this issue") +
+      xlab("Month")
+  })
+  ##/ outputs for page 1 /
+
+
+  ## Download handler ----------------------------------------------------------
+  output$xlsx_download <- downloadHandler(
+    filename = str_c("waterways-chaplains-interactions_", Sys.Date(), ".csv"),
+    content = function(file){
+      vroom_write(data, file, delim = ",")
+    }
+  )
 }
 
 #### RUN APP ###################################################################
