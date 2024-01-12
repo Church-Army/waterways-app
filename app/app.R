@@ -8,6 +8,8 @@ library(carutools)
 library(janitor)
 library(lubridate)
 library(fs)
+library(vroom)
+library(tidyr)
 
 #### THIS CODE ALWAYS RUNS #####################################################
 
@@ -42,14 +44,42 @@ if(is.data.frame(data)){
 
   data <- tally_delimited_string(data, people)
   data <- tally_delimited_string(data, concerns)
+
+  data <- mutate(data, response_id = str_c("r_", row_number()))
+
+  ## Adding group codes to data ------------------------------------------------
+
+  concerns_categories <- vroom("data/concerns-categories.csv", delim = ",", col_types = "cc")
+
+  concerns <-
+
+    pivot_longer(data, starts_with("concerns_"),
+                 names_to = "concern", values_to = "is_concern") |>
+
+    select(response_id, concern, is_concern) |>
+
+    left_join(concerns_categories, by = c("concern")) |>
+
+    summarise(is_concern = any(is_concern),
+              .by = c(response_id, concern_category)) |>
+
+    pivot_wider(names_from = concern_category,
+                values_from = is_concern)
+
+  generalised_data <-
+    data |>
+    select(-starts_with("concern_")) |>
+    left_join(concerns, by = "response_id")
 }
+
+
+#### USER INTERFACE ############################################################
 
 all_months <-
   c("January", "February", "March", "April", "May",
     "June", "July", "August", "September", "October",
     "November", "December")
 
-#### USER INTERFACE ############################################################
 
 ui <- fluidPage(tabsetPanel(
   tabPanel("main_page",
@@ -68,6 +98,7 @@ ui <- fluidPage(tabsetPanel(
   ),
   tabPanel("Detailed graphs and tables")
 ))
+
 #### SERVER ####################################################################
 
 server <- function(input, output) {
