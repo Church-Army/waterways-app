@@ -47,7 +47,20 @@ if(is.data.frame(data)){
 
   data <- mutate(data, response_id = str_c("r_", row_number()))
 
-  ## Adding group codes to data ------------------------------------------------
+  ## Converting conversations to numeric ---------------------------------------
+
+  conversation_responses <- c("None", "One", "Two", "Three", "Four", "Five or more")
+
+  data <- mutate(
+    data,
+    across(c(n_meaningful, n_general),
+           \(x){
+             match(x, conversation_responses) - 1
+           }
+           )
+    )
+
+  ## Adding concern group codes to data ----------------------------------------
 
   concerns_categories <- vroom("data/concerns-categories.csv", delim = ",", col_types = "cc")
 
@@ -81,51 +94,43 @@ all_months <-
     "November", "December")
 
 
-ui <- fluidPage(tabsetPanel(
-  tabPanel("main_page",
-           sidebarLayout(
-             sidebarPanel(
-               checkboxGroupInput("months", "Months", choices  = all_months, selected = all_months)
-             ),
-             mainPanel(textOutput("test_text"),
-                       tableOutput("test_table"))
+p_size <- function(..., size = 1, em = TRUE) p(..., style = str_c("font-size:", size, if_else(em, "em", "px"), ";"))
+
+ui <- fluidPage(
+  tabsetPanel(
+    tabPanel("At a glance",
+           fluidPage(
+             fluidRow(
+               div(
+                 h1("So far this year:"),
+                 p("We have had over ",
+                   strong(textOutput("total_general", inline = TRUE)), " conversations and over",
+                   strong(textOutput("total_meaningful", inline = TRUE)), " meaningful conversations on Britain's Waterways."),
+                 style = "font-size:2em;"
+             )
+           ),
+             fluidRow()
            )),
-  tabPanel("Who are we talking to?"),
-  tabPanel("What are we talking about?"),
-  tabPanel(
-    "Download data",
-    downloadButton("xlsx_download", "Download data")
-  ),
-  tabPanel("Detailed graphs and tables")
-))
+    tabPanel("Who are we talking to?"),
+    tabPanel("What are we talking about?"),
+    tabPanel(
+      "Download data",
+      downloadButton("xlsx_download", "Download data")
+    ),
+    tabPanel("Detailed graphs and tables")
+  )
+)
 
 #### SERVER ####################################################################
 
 server <- function(input, output) {
 
-  # test_text ------------------------------------------------------------------
-  output$test_text <- renderText({
+  output$total_meaningful <- renderText({
+    as.character(sum(data[["n_meaningful"]], na.rm = TRUE))
+  })
 
-    if("error" %in% class(data)){
-
-      text_to_show <- paste0("Error: ", error[["message"]])
-
-      } else {
-
-        text_to_show <-
-          str_c("Succesfully reading a Google sheet with these column names:",
-                str_c(names(data), collapse = " "),
-                collapse = "\n\n")
-      }
-
-    text_to_show
-
-    }) # /test_text
-
-  # test_table ----------------------------------------------------------------=
-  output$test_table <- renderTable({
-    data |>
-      filter(month %in% input$months)
+  output$total_general <- renderText({
+    as.character(sum(data[["n_general"]], na.rm = TRUE))
   })
 }
 
