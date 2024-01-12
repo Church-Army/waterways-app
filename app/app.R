@@ -60,6 +60,13 @@ if(is.data.frame(data)){
            )
     )
 
+  ## Add month-level date-time marker
+
+  data <-
+    mutate(data,
+           month =
+             str_c(year(timestamp), ))
+
   ## Adding concern group codes to data ----------------------------------------
 
   concerns_categories <- vroom("data/concerns-categories.csv", delim = ",", col_types = "cc")
@@ -87,12 +94,6 @@ if(is.data.frame(data)){
 
 
 #### USER INTERFACE ############################################################
-
-all_months <-
-  c("January", "February", "March", "April", "May",
-    "June", "July", "August", "September", "October",
-    "November", "December")
-
 
 p_size <- function(..., size = 1, em = TRUE) p(..., style = str_c("font-size:", size, if_else(em, "em", "px"), ";"))
 
