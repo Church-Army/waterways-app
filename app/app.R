@@ -65,7 +65,9 @@ if(is.data.frame(data)){
   data <-
     mutate(data,
            month =
-             str_c(year(timestamp), ))
+             str_c(year(timestamp), match(month, month.name), "01",
+                   sep = "-") |>
+             ymd())
 
   ## Adding concern group codes to data ----------------------------------------
 
