@@ -13,6 +13,9 @@ library(tidyr)
 
 #### THIS CODE ALWAYS RUNS #####################################################
 
+## Note to self: Could we have the form take counts of each concern raised?
+## Then we could meaningfully count things from month to month.
+
 # credentials and authentication -----------------------------------------------
 gs4_deauth()
 
@@ -104,6 +107,14 @@ if(is.data.frame(data)){
 }
 
 
+## Miscellaneous helpers -------------------------------------------------------
+
+capitalise <- function(x){
+  first <- str_to_upper(str_sub(x, 1, 1))
+  rest  <- str_sub(x, 2, -1)
+  str_c(first, rest)
+}
+
 #### USER INTERFACE ############################################################
 
 p_size <- function(..., size = 1, em = TRUE) p(..., style = str_c("font-size:", size, if_else(em, "em", "px"), ";"))
@@ -122,7 +133,10 @@ ui <- fluidPage(
                  style = "font-size:2em;"
              )
            ),
-             fluidRow(plotOutput("concerns_plot"))
+             fluidRow(
+               h2("Concerns raised so far this year:"),
+               plotOutput("concerns_plot", width = "90%")
+               )
            )),
 
     tabPanel("Who are we talking to?"),
@@ -164,8 +178,20 @@ server <- function(input, output) {
 
     ggplot(plot_data,
            aes(x = month, colour = concern, y = count)) +
+
       geom_line() +
-      theme_ca()
+
+      scale_colour_discrete(
+        label = \(x){
+          capitalise(x) |>
+            str_replace_all("_", " ")
+        }
+      ) +
+
+      theme_ca() +
+      theme(
+        text = element_text(size = 28)
+      )
   })
   ##/ outputs for page 1 /
 
