@@ -142,7 +142,7 @@ ui <- fluidPage(
 
     tabPanel("Who are we talking to?"),
 
-    tabPanel("What are we talking about?"),
+    tabPanel("What are we talking about?", plotOutput("horizontal_concerns_bar")),
 
     tabPanel(
       "Download data",
@@ -214,6 +214,46 @@ server <- function(input, output) {
       vroom_write(data, file, delim = ",")
     }
   )
+
+  ## Horizontal concerns plot --------------------------------------------------
+  output$horizontal_concerns_bar <- renderPlot({
+
+    very_concise_concerns <-
+      data |>
+
+      pivot_longer(starts_with("concerns_"),
+                   names_to = "concern",
+                   values_to = "indicated") |>
+
+      summarise(count = sum(indicated),
+              .by = c(month, concern))
+
+
+    ggplot(very_concise_concerns, aes(x = count, y = reorder(concern, count), fill = concern)) +
+
+      geom_col() +
+
+      theme_minimal() +
+
+      scale_fill_manual(values = rep(brewer.pal(12, "Set3"), length.out = nrow            (very_concise_concerns))) +
+
+      labs(x = "Count", y = "Conversation topics", title = "What are we talking about?") +
+
+      theme_ca("black") +
+
+      theme(legend.position = "none") +
+
+      scale_y_discrete(
+
+        labels = \(x){
+          str_remove(x, "concerns_") |>
+            str_replace("un_employment", "unemployment") |>
+            to_title_case() |>
+            str_replace("Ptsd", "PTSD")
+        }
+      )
+  })
+
 }
 
 #### RUN APP ###################################################################
