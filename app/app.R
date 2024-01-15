@@ -13,6 +13,7 @@ library(tidyr)
 library(scales)
 library(RColorBrewer)
 library(snakecase)
+library(forcats)
 
 #### THIS CODE ALWAYS RUNS #####################################################
 
@@ -231,7 +232,9 @@ server <- function(input, output) {
       summarise(count = sum(occured), .by = c(concern, month)) |>
       mutate(concern =
                capitalise(concern) |>
-               str_replace_all("_", " "))
+               str_replace_all("_", " ") |>
+               ordered() |>
+               fct_reorder(-count))
 
     highlight <- filter(plot_data, concern %in% input$concerns_plot_highlight)
     lowlight  <- filter(plot_data, !concern %in% input$concerns_plot_highlight)
