@@ -21,7 +21,6 @@ library(forcats)
 # credentials and authentication -----------------------------------------------
 gs4_deauth()
 
-is_app_dir <- file_exists(here(".appDir"))
 auth_cache <- "secrets"
 gs4_auth(email = TRUE, cache = auth_cache)
 
@@ -140,8 +139,6 @@ if(is.data.frame(data)){
 
 
 #### USER INTERFACE ############################################################
-
-p_size <- function(..., size = 1, em = TRUE) p(..., style = str_c("font-size:", size, if_else(em, "em", "px"), ";"))
 
 ui <- fluidPage(
   tabsetPanel(
