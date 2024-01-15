@@ -10,11 +10,9 @@ library(lubridate)
 library(fs)
 library(vroom)
 library(tidyr)
+library(scales)
 
 #### THIS CODE ALWAYS RUNS #####################################################
-
-## Note to self: Could we have the form take counts of each concern raised?
-## Then we could meaningfully count things from month to month.
 
 # credentials and authentication -----------------------------------------------
 gs4_deauth()
@@ -115,6 +113,14 @@ capitalise <- function(x){
   str_c(first, rest)
 }
 
+today <- function(){
+  Sys.Date()
+}
+
+year_ago <- function(from = today()){
+  from - days(365)
+}
+
 #### USER INTERFACE ############################################################
 
 p_size <- function(..., size = 1, em = TRUE) p(..., style = str_c("font-size:", size, if_else(em, "em", "px"), ";"))
@@ -184,6 +190,8 @@ server <- function(input, output) {
       summarise(occured = any(identified), .by = c(concern, email_address, month)) |>
       summarise(count = sum(occured), .by = c(concern, month))
 
+    # browser()
+
     ggplot(plot_data,
            aes(x = month, colour = concern, y = count)) +
 
@@ -195,6 +203,11 @@ server <- function(input, output) {
             str_replace_all("_", " ")
         }
       ) +
+
+      scale_x_date(
+        breaks = "1 month",
+        limits = c(year_ago(), today()),
+        date_labels = "%b %y") +
 
       theme_ca() +
       theme(
