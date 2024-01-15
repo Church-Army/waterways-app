@@ -140,11 +140,21 @@ ui <- fluidPage(
              )
            ),
              fluidRow(
-               h2("Concerns raised so far this year:"),
-               plotOutput("concerns_plot", width = "90%", height = "600px")
-               )
-           )),
-
+               sidebarLayout(
+                 sidebarPanel(
+                   dateRangeInput(
+                     "concerns_plot_daterange",
+                     label = "Show concerns raised between:",
+                     start = year_ago(),
+                     end = today(),
+                     min = "2022-01-01",
+                     max = today()),
+                   width = 2
+                   ),
+               mainPanel(
+                 h2("Concerns raised so far this year:"),
+                 plotOutput("concerns_plot", width = "90%", height = "600px")
+                 ))))),
 
     tabPanel("Who are we talking to?"),
 
@@ -206,7 +216,8 @@ server <- function(input, output) {
 
       scale_x_date(
         breaks = "1 month",
-        limits = c(year_ago(), today()),
+        limits = c(input$concerns_plot_daterange[1],
+                   input$concerns_plot_daterange[2]),
         date_labels = "%b %y") +
 
       theme_ca() +
