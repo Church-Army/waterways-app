@@ -11,6 +11,8 @@ library(fs)
 library(vroom)
 library(tidyr)
 library(scales)
+library(RColorBrewer)
+library(snakecase)
 
 #### THIS CODE ALWAYS RUNS #####################################################
 
@@ -142,6 +144,7 @@ p_size <- function(..., size = 1, em = TRUE) p(..., style = str_c("font-size:", 
 ui <- fluidPage(
   tabsetPanel(
 
+    ## AT A GLANCE =============================================================
     tabPanel("At a glance",
            fluidPage(
              fluidRow(
@@ -182,7 +185,10 @@ ui <- fluidPage(
 
     tabPanel("Who are we talking to?"),
 
-    tabPanel("What are we talking about?", plotOutput("horizontal_concerns_bar")),
+
+    ## WHAT ARE WE TALKING ABOUT? ==============================================
+    tabPanel("What are we talking about?",
+             plotOutput("horizontal_concerns_bar", height = "600px")),
 
     tabPanel(
       "Download data",
@@ -226,8 +232,6 @@ server <- function(input, output) {
       mutate(concern =
                capitalise(concern) |>
                str_replace_all("_", " "))
-
-    # browser()
 
     highlight <- filter(plot_data, concern %in% input$concerns_plot_highlight)
     lowlight  <- filter(plot_data, !concern %in% input$concerns_plot_highlight)
@@ -286,25 +290,27 @@ server <- function(input, output) {
 
       geom_col() +
 
-      theme_minimal() +
-
-      scale_fill_manual(values = rep(brewer.pal(12, "Set3"), length.out = nrow            (very_concise_concerns))) +
-
-      labs(x = "Count", y = "Conversation topics", title = "What are we talking about?") +
-
-      theme_ca("black") +
-
-      theme(legend.position = "none") +
-
+      scale_fill_manual(values = rep(brewer.pal(12, "Set3"),
+                                     length.out = nrow(very_concise_concerns))
+                        ) +
       scale_y_discrete(
-
         labels = \(x){
           str_remove(x, "concerns_") |>
             str_replace("un_employment", "unemployment") |>
             to_title_case() |>
             str_replace("Ptsd", "PTSD")
         }
-      )
+      ) +
+
+      labs(x = "Count",
+           y = "Conversation topics",
+           title = "What are we talking about?") +
+
+      theme_ca("black") +
+      theme(legend.position = "none",
+            text = element_text(size = 28),
+            panel.grid.major.y = element_blank())
+
   })
 
 }
