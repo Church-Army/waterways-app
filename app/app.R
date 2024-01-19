@@ -73,7 +73,12 @@ if(is.data.frame(data)){
     data,
     across(c(n_meaningful, n_general),
            \(x){
-             match(x, conversation_responses) - 1
+             numeric_x <- as.numeric(x)
+             matched_x <- match(x, conversation_responses) - 1
+
+             matched_x[is.na(matched_x)] <- numeric_x[is.na(matched_x)]
+
+             matched_x
            }
            )
     )
@@ -169,7 +174,8 @@ ui <- fluidPage(
                    width = 2
                    ),
                mainPanel(
-                 plotOutput("concerns_plot", width = "90%", height = "600px")
+                 plotOutput("concerns_plot", width = "90%", height = "600px"),
+                 width = 10
                  ))))),
 
     tabPanel("Who are we talking to?"),
