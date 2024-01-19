@@ -58,7 +58,6 @@ if(is.data.frame(data)){
 
   ## Tally counts from comma-delimited string columns (widening data) ----------
 
-
   data <- mutate(data, across(c(people, concerns), str_to_lower))
 
   data <- tally_delimited_string(data, people)
@@ -130,8 +129,6 @@ if(is.data.frame(data)){
 
 
 #### USER INTERFACE ############################################################
-
-p_size <- function(..., size = 1, em = TRUE) p(..., style = str_c("font-size:", size, if_else(em, "em", "px"), ";"))
 
 ui <- fluidPage(
   tabsetPanel(
