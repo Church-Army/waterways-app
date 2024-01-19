@@ -90,7 +90,12 @@ if(is.data.frame(data)){
            month =
              str_c(year(timestamp), match(month, month.name), "01",
                    sep = "-") |>
-             ymd())
+             ymd(),
+           # if this month hadn't started at the time of data collection,
+           # assume we're talking about the nearest preceding month
+           # (A 'December' collection in Jan will be for December last year.)
+           month = if_else(month > timestamp, month - period("year"), month)
+           )
 
   ## Adding concern group codes to data ----------------------------------------
 
