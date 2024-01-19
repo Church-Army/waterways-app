@@ -10,11 +10,12 @@ library(lubridate)
 library(fs)
 library(vroom)
 library(tidyr)
+library(scales)
+library(RColorBrewer)
+library(snakecase)
+library(forcats)
 
 #### THIS CODE ALWAYS RUNS #####################################################
-
-## Note to self: Could we have the form take counts of each concern raised?
-## Then we could meaningfully count things from month to month.
 
 # credentials and authentication -----------------------------------------------
 gs4_deauth()
@@ -22,6 +23,22 @@ gs4_deauth()
 is_app_dir <- file_exists(here(".appDir"))
 auth_cache <- "secrets"
 gs4_auth(email = TRUE, cache = auth_cache)
+
+## Miscellaneous helpers -------------------------------------------------------
+
+capitalise <- function(x){
+  first <- str_to_upper(str_sub(x, 1, 1))
+  rest  <- str_sub(x, 2, -1)
+  str_c(first, rest)
+}
+
+today <- function(){
+  Sys.Date()
+}
+
+year_ago <- function(from = today()){
+  from - days(365)
+}
 
 # attempt to read sheet --------------------------------------------------------
 secret_sheet <- "14qI8A51Op2Ri3yfwD1t2AQZ1fxki-KUFb7_EEyvO4Lo"
@@ -104,16 +121,22 @@ if(is.data.frame(data)){
     data |>
     select(-starts_with("concern_")) |>
     left_join(concerns, by = "response_id")
+
+  generalised_concerns <-
+    select(generalised_data, starts_with("concern_")) |>
+    names()
+
+  generalised_concerns <-
+    str_remove(generalised_concerns, "concern_") |>
+    str_replace_all("_", " ") |>
+    str_remove_all("[:punct:]") |>
+    str_squish() |>
+    capitalise() |>
+    sort()
 }
 
 
-## Miscellaneous helpers -------------------------------------------------------
 
-capitalise <- function(x){
-  first <- str_to_upper(str_sub(x, 1, 1))
-  rest  <- str_sub(x, 2, -1)
-  str_c(first, rest)
-}
 
 #### USER INTERFACE ############################################################
 
@@ -122,6 +145,7 @@ p_size <- function(..., size = 1, em = TRUE) p(..., style = str_c("font-size:", 
 ui <- fluidPage(
   tabsetPanel(
 
+    ## AT A GLANCE =============================================================
     tabPanel("At a glance",
            fluidPage(
              fluidRow(
@@ -134,15 +158,38 @@ ui <- fluidPage(
              )
            ),
              fluidRow(
-               h2("Concerns raised so far this year:"),
-               plotOutput("concerns_plot", width = "90%", height = "600px")
-               )
-           )),
+               h2("These are some of the concerns that have been raised:"),
+               p(""),
+               sidebarLayout(
+                 sidebarPanel(
 
+                   dateRangeInput(
+                     "concerns_plot_daterange",
+                     label = "Show concerns raised between:",
+                     start = year_ago(),
+                     end = today(),
+                     min = "2022-01-01",
+                     max = today()),
+
+                   checkboxGroupInput(
+                     "concerns_plot_highlight",
+                     "Concerns to highlight:",
+                     choices = generalised_concerns,
+                     selected = sample(generalised_concerns, 2)
+                     ),
+
+                   width = 2
+                   ),
+               mainPanel(
+                 plotOutput("concerns_plot", width = "90%", height = "600px")
+                 ))))),
 
     tabPanel("Who are we talking to?"),
 
-    tabPanel("What are we talking about?", plotOutput("horizontal_concerns_bar")),
+
+    ## WHAT ARE WE TALKING ABOUT? ==============================================
+    tabPanel("What are we talking about?",
+             plotOutput("horizontal_concerns_bar", height = "600px")),
 
     tabPanel(
       "Download data",
@@ -182,23 +229,36 @@ server <- function(input, output) {
       # occurrences ongoingly, so currently this seems like the most responsible way
       # to report
       summarise(occured = any(identified), .by = c(concern, email_address, month)) |>
-      summarise(count = sum(occured), .by = c(concern, month))
+      summarise(count = sum(occured), .by = c(concern, month)) |>
+      mutate(concern =
+               capitalise(concern) |>
+               str_replace_all("_", " ") |>
+               ordered() |>
+               fct_reorder(-count))
 
-    ggplot(plot_data,
-           aes(x = month, colour = concern, y = count)) +
+    highlight <- filter(plot_data, concern %in% input$concerns_plot_highlight)
+    lowlight  <- filter(plot_data, !concern %in% input$concerns_plot_highlight)
 
-      geom_line() +
+    ggplot(lowlight, aes(x = month, y = count, group = concern)) +
 
-      scale_colour_discrete(
-        label = \(x){
-          capitalise(x) |>
-            str_replace_all("_", " ")
-        }
-      ) +
+      geom_line(colour = "gray60", alpha = 0.35) +
+
+      geom_line(data = highlight, aes(x = month, y = count, colour = concern),
+                size = 2, alpha = 0.85) +
+
+      scale_colour_discrete() +
+
+      scale_x_date(
+        breaks = "1 month",
+        limits = c(input$concerns_plot_daterange[1],
+                   input$concerns_plot_daterange[2]),
+        date_labels = "%b %y",
+        guide = guide_axis(n.dodge = 2)) +
 
       theme_ca() +
       theme(
-        text = element_text(size = 28)
+        text = element_text(size = 28),
+        panel.grid.minor = element_blank()
       ) +
 
       ylab("Chaplains who encountered this issue") +
@@ -233,25 +293,27 @@ server <- function(input, output) {
 
       geom_col() +
 
-      theme_minimal() +
-
-      scale_fill_manual(values = rep(brewer.pal(12, "Set3"), length.out = nrow            (very_concise_concerns))) +
-
-      labs(x = "Count", y = "Conversation topics", title = "What are we talking about?") +
-
-      theme_ca("black") +
-
-      theme(legend.position = "none") +
-
+      scale_fill_manual(values = rep(brewer.pal(12, "Set3"),
+                                     length.out = nrow(very_concise_concerns))
+                        ) +
       scale_y_discrete(
-
         labels = \(x){
           str_remove(x, "concerns_") |>
             str_replace("un_employment", "unemployment") |>
             to_title_case() |>
             str_replace("Ptsd", "PTSD")
         }
-      )
+      ) +
+
+      labs(x = "Count",
+           y = "Conversation topics",
+           title = "What are we talking about?") +
+
+      theme_ca("black") +
+      theme(legend.position = "none",
+            text = element_text(size = 28),
+            panel.grid.major.y = element_blank())
+
   })
 
 }
