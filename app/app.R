@@ -282,7 +282,8 @@ server <- function(input, output) {
   output$xlsx_download <- downloadHandler(
     filename = str_c("waterways-chaplains-interactions_", Sys.Date(), ".csv"),
     content = function(file){
-      vroom_write(data, file, delim = ",")
+      download_content <- select(data, -email_address),
+      vroom_write(download_content, file, delim = ",")
     }
   )
 
