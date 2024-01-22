@@ -5,6 +5,10 @@ account: church-army
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 10890899
+<<<<<<< HEAD
+bundleId: 8145966
+=======
 bundleId: 8162820
+>>>>>>> a8149f67af4478064602651f74d8204a64673672
 url: https://church-army.shinyapps.io/waterways-test/
 version: 1
