@@ -56,7 +56,17 @@ if(is.data.frame(data)){
                  concerns     = which_of_the_following_concerns_were_identified_by_your_conversations,
                  comments     = do_you_have_any_other_comments_about_your_recent_interactions_that_you_would_like_to_share)
 
+  # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<#
+  ##############################################################################
+  ##    DELET THIS // DELET THIS // DELET THIS // DELET THIS // DELET THIS     #
+  data <- filter(data, month != "January")
+  ##############################################################################
+  # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
+  ## Clean names and rename ----------------------------------------------------
+
+
   ## Tally counts from comma-delimited string columns (widening data) ----------
+
 
   data <- mutate(data, across(c(people, concerns), str_to_lower))
 
@@ -125,50 +135,7 @@ if(is.data.frame(data)){
     sort()
 }
 
- ###Sorting out people ---------------------------------------------------------
 
-people_categories <- vroom("data/concerns-categories.csv", delim = ",", col_types = "cc")
-
-pivot_longer(data, starts_with("concerns_"),
-             names_to = "concern", values_to = "is_concern") |>
-
-  select(response_id, concern, is_concern) |>
-
-  left_join(concerns_categories, by = c("concern")) |>
-
-  summarise(is_concern = any(is_concern),
-            .by = c(response_id, concern_category)) |>
-
-  pivot_wider(names_from = concern_category,
-              values_from = is_concern,
-              names_prefix = "concern_")
-
-generalised_data <-
-  data |>
-  select(-starts_with("concern_")) |>
-  left_join(concerns, by = "response_id")
-
-generalised_concerns <-
-  select(generalised_data, starts_with("concern_")) |>
-  names()
-
-generalised_concerns <-
-  str_remove(generalised_concerns, "concern_") |>
-  str_replace_all("_", " ") |>
-  str_remove_all("[:punct:]") |>
-  str_squish() |>
-  capitalise() |>
-  sort()
-
-
-
-
-
-
-# Dave's code
-#pivot_longer() |>
-#  group_by(name, email_address, month) |>
-#  summarise(n_people = sum(people))
 
 
 #### USER INTERFACE ############################################################
@@ -215,8 +182,7 @@ ui <- fluidPage(
                  plotOutput("concerns_plot", width = "90%", height = "600px")
                  ))))),
 
-    tabPanel("Who are we talking to?",
-             plotOutput("people_plot")),
+    tabPanel("Who are we talking to?"),
 
 
     ## WHAT ARE WE TALKING ABOUT? ==============================================
@@ -296,18 +262,6 @@ server <- function(input, output) {
       ylab("Chaplains who encountered this issue") +
       xlab("Month")
   })
-
-  output$people_plot <- renderPlot({
-
-    data |>
-      pivot_longer(starts_with("people_"), names_to = "people", values_to = "present") |>
-      summarise(n_people = sum(present), .by = c("month", "people")) |>
-      ggplot(aes(x = month, y = n_people, colour = people)) +
-      geom_col() +
-      coord_polar()
-  })
-
-
   ##/ outputs for page 1 /
 
 
@@ -362,7 +316,7 @@ server <- function(input, output) {
 
   ## Pie chart people plot -----------------------------------------------------
 
-  ggplot(data, aes(x = people, y = count, fill = people)) +
+  ggplot(very_concise_people, aes(x = people, y = count, fill = people)) +
 
     geom_col(width = 1) +
 
@@ -373,7 +327,7 @@ server <- function(input, output) {
 
     theme_minimal() +
 
-    scale_fill_manual(values = rep(brewer.pal(12, "Set3"), length.out = nrow(data))) +
+    scale_fill_manual(values = rep(brewer.pal(12, "Set3"), length.out = nrow(very_concise_people))) +
 
     theme_ca("black") +
 
