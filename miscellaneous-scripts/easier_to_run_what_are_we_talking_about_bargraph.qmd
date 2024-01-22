@@ -9,6 +9,7 @@ editor: visual
 ```{r setting_up}
 library(ggplot2)
 library(snakecase)
+library(RColorBrewer)
 
 secret_sheet <- "14qI8A51Op2Ri3yfwD1t2AQZ1fxki-KUFb7_EEyvO4Lo"
 data <- tryCatch(read_sheet(secret_sheet), error = identity)
@@ -63,4 +64,32 @@ ggplot(very_concise_concerns, aes(x = count, y = reorder(concern, count), fill =
       str_replace("Ptsd", "PTSD")
   }
 )
+```
+
+```{r pie_chart}
+ggplot(very_concise_people, aes(x = people, y = count, fill = people)) +
+
+geom_col(width = 1) +
+
+theme(axis.line = element_blank(),          
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.border = element_blank()) +
+  
+theme_minimal() +
+  
+scale_fill_manual(values = rep(brewer.pal(12, "Set3"), length.out = nrow(very_concise_people))) +
+  
+ theme_ca("black") +
+
+labs(x = "", y = "",
+       title = "Who are we talking to?") +
+  
+theme(legend.position = "none") +
+    
+scale_x_discrete(labels = ~ str_remove(.x, "people")  |>  
+                                str_replace("wo_men", "women") |> 
+                                to_title_case()) + 
+ 
+coord_polar()
 ```

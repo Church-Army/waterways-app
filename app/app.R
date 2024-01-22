@@ -17,12 +17,12 @@ library(forcats)
 library(digest)
 library(shinyWidgets)
 
+
 #### THIS CODE ALWAYS RUNS #####################################################
 
 # credentials and authentication -----------------------------------------------
 gs4_deauth()
 
-is_app_dir <- file_exists(here(".appDir"))
 auth_cache <- "secrets"
 gs4_auth(email = TRUE, cache = auth_cache)
 
@@ -137,7 +137,6 @@ if(is.data.frame(data)){
 }
 
 #### USER INTERFACE ############################################################
-
 
 concerns_picker <- function(...,
                             prefix,
@@ -402,6 +401,35 @@ server <- function(input, output) {
       scale_fill_manual(values = fill_colours)
 
   })
+
+  ## Pie chart people plot -----------------------------------------------------
+
+  ggplot(very_concise_people, aes(x = people, y = count, fill = people)) +
+
+    geom_col(width = 1) +
+
+    theme(axis.line = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_blank()) +
+
+    theme_minimal() +
+
+    scale_fill_manual(values = rep(brewer.pal(12, "Set3"), length.out = nrow(very_concise_people))) +
+
+    theme_ca("black") +
+
+    labs(x = "", y = "",
+         title = "Who are we talking to?") +
+
+    theme(legend.position = "none") +
+
+    scale_x_discrete(labels = ~ str_remove(.x, "people")  |>
+                       str_replace("wo_men", "women") |>
+                       to_title_case()) +
+
+    coord_polar()
+
 
 }
 
