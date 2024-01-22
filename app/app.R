@@ -14,6 +14,7 @@ library(scales)
 library(RColorBrewer)
 library(snakecase)
 library(forcats)
+library(shinyWidgets)
 
 
 #### THIS CODE ALWAYS RUNS #####################################################
@@ -40,6 +41,16 @@ year_ago <- function(from = today()){
   from - days(365)
 }
 
+prettify <- function(x) {
+  capitalise(x) |>
+    str_replace_all("_", " ")
+}
+
+fill_colours <-
+  c("#89C5DA", "#DA5724", "#74D944", "#CE50CA", "#3F4921", "#C0717C", "#CBD588", "#5F7FC7",
+    "#673770", "#D3D93E", "#38333E", "#508578", "#D7C1B1", "#689030", "#AD6F3B", "#CD9BCD",
+    "#D14285", "#6DDE88", "#652926", "#7FDCC0", "#C84248", "#8569D5", "#5E738F", "#D1A33D",
+    "#8A7C64", "#599861")
 # attempt to read sheet --------------------------------------------------------
 secret_sheet <- "14qI8A51Op2Ri3yfwD1t2AQZ1fxki-KUFb7_EEyvO4Lo"
 data <- tryCatch(read_sheet(secret_sheet), error = identity)
@@ -56,17 +67,7 @@ if(is.data.frame(data)){
                  concerns     = which_of_the_following_concerns_were_identified_by_your_conversations,
                  comments     = do_you_have_any_other_comments_about_your_recent_interactions_that_you_would_like_to_share)
 
-  # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<#
-  ##############################################################################
-  ##    DELET THIS // DELET THIS // DELET THIS // DELET THIS // DELET THIS     #
-  data <- filter(data, month != "January")
-  ##############################################################################
-  # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
-  ## Clean names and rename ----------------------------------------------------
-
-
   ## Tally counts from comma-delimited string columns (widening data) ----------
-
 
   data <- mutate(data, across(c(people, concerns), str_to_lower))
 
@@ -83,7 +84,12 @@ if(is.data.frame(data)){
     data,
     across(c(n_meaningful, n_general),
            \(x){
-             match(x, conversation_responses) - 1
+             numeric_x <- as.numeric(x)
+             matched_x <- match(x, conversation_responses) - 1
+
+             matched_x[is.na(matched_x)] <- numeric_x[is.na(matched_x)]
+
+             matched_x
            }
            )
     )
@@ -95,7 +101,12 @@ if(is.data.frame(data)){
            month =
              str_c(year(timestamp), match(month, month.name), "01",
                    sep = "-") |>
-             ymd())
+             ymd(),
+           # if this month hadn't started at the time of data collection,
+           # assume we're talking about the nearest preceding month
+           # (A 'December' collection in Jan will be for December last year.)
+           month = if_else(month > timestamp, month - period("year"), month)
+           )
 
   ## Adding concern group codes to data ----------------------------------------
 
@@ -121,25 +132,36 @@ if(is.data.frame(data)){
     data |>
     select(-starts_with("concern_")) |>
     left_join(concerns, by = "response_id")
-
-  generalised_concerns <-
-    select(generalised_data, starts_with("concern_")) |>
-    names()
-
-  generalised_concerns <-
-    str_remove(generalised_concerns, "concern_") |>
-    str_replace_all("_", " ") |>
-    str_remove_all("[:punct:]") |>
-    str_squish() |>
-    capitalise() |>
-    sort()
 }
-
-
-
 
 #### USER INTERFACE ############################################################
 
+<<<<<<< HEAD
+=======
+concerns_picker <- function(...,
+                            prefix,
+                            choices = NULL,
+                            randomly_select = length(choices)){
+  sidebarPanel(
+    ...,
+    dateRangeInput(
+      str_c(prefix, "_daterange"),
+      label = "Show concerns raised between:",
+      start = year_ago(),
+      end = today(),
+      min = "2022-01-01",
+      max = today()),
+
+    checkboxGroupInput(
+      str_c(prefix, "_highlight"),
+      "Concerns to highlight:",
+      choices = choices,
+      selected = sample(choices, randomly_select)
+    ))
+}
+
+
+>>>>>>> a8149f67af4478064602651f74d8204a64673672
 ui <- fluidPage(
   tabsetPanel(
 
@@ -159,27 +181,10 @@ ui <- fluidPage(
                h2("These are some of the concerns that have been raised:"),
                p(""),
                sidebarLayout(
-                 sidebarPanel(
-
-                   dateRangeInput(
-                     "concerns_plot_daterange",
-                     label = "Show concerns raised between:",
-                     start = year_ago(),
-                     end = today(),
-                     min = "2022-01-01",
-                     max = today()),
-
-                   checkboxGroupInput(
-                     "concerns_plot_highlight",
-                     "Concerns to highlight:",
-                     choices = generalised_concerns,
-                     selected = sample(generalised_concerns, 2)
-                     ),
-
-                   width = 2
-                   ),
+                 uiOutput("concerns_picker_mainpage"),
                mainPanel(
-                 plotOutput("concerns_plot", width = "90%", height = "600px")
+                 plotOutput("concerns_plot", width = "90%", height = "600px"),
+                 width = 10
                  ))))),
 
     tabPanel("Who are we talking to?"),
@@ -187,7 +192,9 @@ ui <- fluidPage(
 
     ## WHAT ARE WE TALKING ABOUT? ==============================================
     tabPanel("What are we talking about?",
-             plotOutput("horizontal_concerns_bar", height = "600px")),
+               uiOutput("concerns_picker_hbar"),
+               mainPanel(plotOutput("horizontal_concerns_bar", height = "600px"))
+             ),
 
     tabPanel(
       "Download data",
@@ -203,7 +210,6 @@ ui <- fluidPage(
 server <- function(input, output) {
 
   ## outputs for page 1: -------------------------------------------------------
-
   output$total_meaningful <- renderText({
     as.character(sum(data[["n_meaningful"]], na.rm = TRUE))
   })
@@ -212,30 +218,40 @@ server <- function(input, output) {
     as.character(sum(data[["n_general"]], na.rm = TRUE))
   })
 
+
+  output$horizontal_concerns_bar <- renderPlot({ggplot()})
+  mainpage_plot_data <-
+    generalised_data |>
+    pivot_longer(starts_with("concern_"),
+                 names_prefix = "concern_",
+                 names_to = "concern",
+                 values_to = "identified") |>
+
+    # NB currently we treat 1 or more occurrences of the same concerns within
+    # a month by the same chaplain as equivalent values, since a return could
+    # be daily or monthly. It's hard to get Google forms to allow people to tally
+    # occurrences ongoingly, so currently this seems like the most responsible way
+    # to report
+    summarise(occured = any(identified), .by = c(concern, email_address, month)) |>
+    summarise(count = sum(occured), .by = c(concern, month)) |>
+    mutate(concern =
+             prettify(concern) |>
+             ordered() |>
+             fct_reorder(-count))
+
+
+
+  output$concerns_picker_mainpage <- renderUI({
+    concerns_picker(prefix = "concerns_mainpage",
+                    choices = unique(mainpage_plot_data[["concern"]]),
+                    randomly_select = 2,
+                    width = 2)
+  })
+
   output$concerns_plot <- renderPlot({
 
-    plot_data <-
-      generalised_data |>
-      pivot_longer(starts_with("concern_"),
-                   names_prefix = "concern_",
-                   names_to = "concern",
-                   values_to = "identified") |>
-
-      # NB currently we treat 1 or more occurrences of the same concerns within
-      # a month by the same chaplain as equivalent values, since a return could
-      # be daily or monthly. It's hard to get Google forms to allow people to tally
-      # occurrences ongoingly, so currently this seems like the most responsible way
-      # to report
-      summarise(occured = any(identified), .by = c(concern, email_address, month)) |>
-      summarise(count = sum(occured), .by = c(concern, month)) |>
-      mutate(concern =
-               capitalise(concern) |>
-               str_replace_all("_", " ") |>
-               ordered() |>
-               fct_reorder(-count))
-
-    highlight <- filter(plot_data, concern %in% input$concerns_plot_highlight)
-    lowlight  <- filter(plot_data, !concern %in% input$concerns_plot_highlight)
+    highlight <- filter(mainpage_plot_data, concern %in% input$concerns_mainpage_highlight)
+    lowlight  <- filter(mainpage_plot_data, !concern %in% input$concerns_mainpage_highlight)
 
     ggplot(lowlight, aes(x = month, y = count, group = concern)) +
 
@@ -248,8 +264,8 @@ server <- function(input, output) {
 
       scale_x_date(
         breaks = "1 month",
-        limits = c(input$concerns_plot_daterange[1],
-                   input$concerns_plot_daterange[2]),
+        limits = c(input$concerns_mainpage_daterange[1],
+                   input$concerns_mainpage_daterange[2]),
         date_labels = "%b %y",
         guide = guide_axis(n.dodge = 2)) +
 
@@ -269,48 +285,87 @@ server <- function(input, output) {
   output$xlsx_download <- downloadHandler(
     filename = str_c("waterways-chaplains-interactions_", Sys.Date(), ".csv"),
     content = function(file){
-      vroom_write(data, file, delim = ",")
+      download_content <- select(data, -email_address)
+      vroom_write(download_content, file, delim = ",")
     }
   )
 
+
+  very_concise_concerns <-
+    data |>
+    pivot_longer(starts_with("concerns_"),
+                 names_to = "concern",
+                 values_to = "indicated") |>
+    summarise(count = sum(indicated),
+              .by = c(month, concern)) |>
+    mutate(concern =
+             str_remove(concern, "concerns_") |>
+             capitalise() |>
+             str_replace_all("_", " ") |>
+             ordered())
+
+  output$concerns_picker_hbar <- renderUI({
+    concerns_picker(prefix = "concerns_hbar",
+                    choices = unique(very_concise_concerns[["concern"]]),
+                    width = 2,
+                    switchInput("is_concerns_pie",
+                                label = "Switch to:",
+                                onLabel = "Bar chart",
+                                offLabel = "Pie chart"))
+    })
   ## Horizontal concerns plot --------------------------------------------------
   output$horizontal_concerns_bar <- renderPlot({
-
+    ## apply sidebar preferences
     very_concise_concerns <-
-      data |>
+      filter(very_concise_concerns,
+             between(month, input$concerns_hbar_daterange[1],
+                     input$concerns_hbar_daterange[2]))
 
-      pivot_longer(starts_with("concerns_"),
-                   names_to = "concern",
-                   values_to = "indicated") |>
+    if(input$is_concerns_pie){
+      plot_out <-
+        mutate(very_concise_concerns,
+               concern = fct_other(concern, keep = input$concerns_hbar_highlight)) |>
+        summarise(count = sum(count), .by = concern) |>
+        mutate(prop = count/sum(count)) |>
 
-      summarise(count = sum(indicated),
-              .by = c(month, concern))
+        ggplot(aes(x = 1, y = count, fill = concern)) +
 
+        geom_col(position = "stack", colour = "black") +
+        geom_text(aes(label = label_percent(0.1)(prop),
+                      x = 1.6),
+                  position = position_stack(0.5),
+                  size = 6) +
 
-    ggplot(very_concise_concerns, aes(x = count, y = reorder(concern, count), fill = concern)) +
+        coord_polar("y") +
 
-      geom_col() +
+        xlab(NULL) +
+        ylab(NULL) +
+        theme_minimal() +
+        theme(
+          text = element_text(size = 20),
+          panel.grid = element_blank(),
+          axis.text = element_blank()
+        )
 
-      scale_fill_manual(values = rep(brewer.pal(12, "Set3"),
-                                     length.out = nrow(very_concise_concerns))
-                        ) +
-      scale_y_discrete(
-        labels = \(x){
-          str_remove(x, "concerns_") |>
-            str_replace("un_employment", "unemployment") |>
-            to_title_case() |>
-            str_replace("Ptsd", "PTSD")
-        }
-      ) +
+    } else {
 
-      labs(x = "Count",
-           y = "Conversation topics",
-           title = "What are we talking about?") +
+      plot_out <-
+      filter(very_concise_concerns, concern %in% input$concerns_hbar_highlight) |>
+        ggplot(aes(x = count, y = reorder(concern, count), fill = concern)) +
 
-      theme_ca("black") +
-      theme(legend.position = "none",
-            text = element_text(size = 28),
-            panel.grid.major.y = element_blank())
+        geom_col() +
+
+        labs(x = "Count",
+             y = "Conversation topics",
+             title = "What are we talking about?") +
+        theme_ca("black") +
+        theme(legend.position = "none",
+              text = element_text(size = 28),
+              panel.grid.major.y = element_blank())
+    }
+
+    plot_out +
+      scale_fill_manual(values = fill_colours)
 
   })
 
