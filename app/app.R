@@ -138,12 +138,6 @@ if(is.data.frame(data)){
 
 #### USER INTERFACE ############################################################
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-=======
-
->>>>>>> 2cebcdd69f8e354f826f52d55dff8f2d7a3581ce
 concerns_picker <- function(...,
                             prefix,
                             choices = NULL,
@@ -166,11 +160,6 @@ concerns_picker <- function(...,
     ))
 }
 
-<<<<<<< HEAD
-
->>>>>>> a8149f67af4478064602651f74d8204a64673672
-=======
->>>>>>> 2cebcdd69f8e354f826f52d55dff8f2d7a3581ce
 ui <- fluidPage(
   tabsetPanel(
 
