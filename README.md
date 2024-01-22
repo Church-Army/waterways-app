@@ -10,4 +10,5 @@ The app is published manually from a local repo, so the remote may well be out o
 - [ ] Visualise test data
 - [ ] Design app interface
 - [ ] Enable data download as xlsx and/or csv file
+	- [ ] Needs to be cleaned (i.e. anonymised)
  
