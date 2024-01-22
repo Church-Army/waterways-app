@@ -352,6 +352,9 @@ server <- function(input, output) {
                      input$concerns_hbar_daterange[2]))
     }
 
+    very_concise_concerns <-
+      summarise(very_concise_concerns, count = sum(count), .by = concern)
+
     if(input$is_concerns_pie){
       plot_out <-
         mutate(very_concise_concerns,
