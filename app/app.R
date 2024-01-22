@@ -14,6 +14,7 @@ library(scales)
 library(RColorBrewer)
 library(snakecase)
 library(forcats)
+library(digest)
 
 #### THIS CODE ALWAYS RUNS #####################################################
 
@@ -55,15 +56,6 @@ if(is.data.frame(data)){
                  people       = how_would_you_describe_the_people_you_have_spoken_to_please_tick_all_that_apply,
                  concerns     = which_of_the_following_concerns_were_identified_by_your_conversations,
                  comments     = do_you_have_any_other_comments_about_your_recent_interactions_that_you_would_like_to_share)
-
-  # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<#
-  ##############################################################################
-  ##    DELET THIS // DELET THIS // DELET THIS // DELET THIS // DELET THIS     #
-  data <- filter(data, month != "January")
-  ##############################################################################
-  # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>#
-  ## Clean names and rename ----------------------------------------------------
-
 
   ## Tally counts from comma-delimited string columns (widening data) ----------
 
@@ -136,11 +128,7 @@ if(is.data.frame(data)){
 }
 
 
-
-
 #### USER INTERFACE ############################################################
-
-p_size <- function(..., size = 1, em = TRUE) p(..., style = str_c("font-size:", size, if_else(em, "em", "px"), ";"))
 
 ui <- fluidPage(
   tabsetPanel(
@@ -191,18 +179,46 @@ ui <- fluidPage(
     tabPanel("What are we talking about?",
              plotOutput("horizontal_concerns_bar", height = "600px")),
 
-    tabPanel(
-      "Download data",
-      downloadButton("xlsx_download", "Download data")
-    ),
+    tabPanel("Detailed graphs and tables"),
 
-    tabPanel("Detailed graphs and tables")
+    tabPanel(
+      "Admin area",
+      passwordInput("admin_password", label = NULL, placeholder = "password"),
+      actionButton("password_entry", "Enter password"),
+      textOutput("password_msg"),
+      uiOutput("admin_area")
+      )
+    )
   )
-)
 
 #### SERVER ####################################################################
 
 server <- function(input, output) {
+
+  valid_password <- reactiveVal(FALSE)
+
+  observeEvent("password_entry",{
+
+    password <- readLines("secrets/admin_password")
+
+    hash <- sha1(input$admin_password)
+
+    if(hash == password){
+      valid_password(TRUE)
+    } else{
+      valid_password(FALSE)
+      output$password_msg <- renderText("Incorrect password")
+    }
+  })
+
+  output$admin_area <- renderUI({
+    if(valid_password()){
+      downloadButton("xlsx_download", "Download data")
+    } else {
+      renderText("Please enter a valid password to access this area of the site")
+    }
+
+  })
 
   ## outputs for page 1: -------------------------------------------------------
 
@@ -244,7 +260,7 @@ server <- function(input, output) {
       geom_line(colour = "gray60", alpha = 0.35) +
 
       geom_line(data = highlight, aes(x = month, y = count, colour = concern),
-                size = 2, alpha = 0.85) +
+                linewidth = 2, alpha = 0.85) +
 
       scale_colour_discrete() +
 
