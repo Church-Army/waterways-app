@@ -12,3 +12,4 @@ secrets
 
 #Ingore rsconnect directory
 app/rsconnect
+app/tmp
