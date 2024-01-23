@@ -306,6 +306,8 @@ server <- function(input, output) {
             drive_put(file_path, path = drive_path)
 
           })
+
+    dir_delete("tmp")
   })
 
   ## outputs for page 1: -------------------------------------------------------
