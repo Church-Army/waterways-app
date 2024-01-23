@@ -277,7 +277,6 @@ server <- function(input, output) {
   })
   ##/ outputs for page 1 /
 
-
   ## Download handler ----------------------------------------------------------
   output$xlsx_download <- downloadHandler(
     filename = str_c("waterways-chaplains-interactions_", Sys.Date(), ".csv"),
