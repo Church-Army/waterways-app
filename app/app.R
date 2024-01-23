@@ -1,6 +1,7 @@
 library(shiny)
 library(ggplot2)
 library(googlesheets4)
+library(googledrive)
 library(here)
 library(dplyr)
 library(stringr)
@@ -16,15 +17,18 @@ library(snakecase)
 library(forcats)
 library(digest)
 library(shinyWidgets)
+library(purrr)
 
 
 #### THIS CODE ALWAYS RUNS #####################################################
 
 # credentials and authentication -----------------------------------------------
 gs4_deauth()
+drive_deauth()
 
 auth_cache <- "secrets"
 gs4_auth(email = TRUE, cache = auth_cache)
+drive_auth(email = TRUE, cache = auth_cache)
 
 ## Miscellaneous helpers -------------------------------------------------------
 
@@ -90,6 +94,7 @@ if(is.data.frame(data)){
              matched_x <- match(x, conversation_responses) - 1
 
              matched_x[is.na(matched_x)] <- numeric_x[is.na(matched_x)]
+             matched_x[is.na(matched_x)] <- 0
 
              matched_x
            }
@@ -212,6 +217,7 @@ ui <- fluidPage(
 
 server <- function(input, output) {
 
+  ## Password protection for admin area === === === === === === === === === ===
   valid_password <- reactiveVal(FALSE)
 
   observeEvent(input$password_entry,{
@@ -229,16 +235,77 @@ server <- function(input, output) {
       }
 })
 
+  ## Admin area UI === === === === === === === === === === === === === === ===
   output$admin_area <- renderUI({
     if(valid_password()){
-      fluidRow(
-      downloadButton("xlsx_download", "Download data"),
-      actionButton("generate_reports", "Generate monthly reports")
+      fluidPage(
+        downloadButton("xlsx_download", "Download data"),
+        h2("Generate monthly reports"),
+        fluidRow(
+          checkboxGroupInput("report_months", "Month(s)",
+                             choices = month.name,
+                             selected = month.name[month(today())],
+                             inline = TRUE),
+          radioButtons("report_year", "Year",
+                       choices = -1:1 + year(today()),
+                       selected = year(today()),
+                       inline = TRUE)
+        ),
+        actionButton("generate_reports", "Generate monthly reports")
       )
     } else {
       renderText("Please enter a valid password to access this area of the site")
     }
 
+  })
+
+  ## Generate reports on button press ------------------------------------------
+  observeEvent(input$generate_reports, {
+    months <- match(input$report_months, month.name)
+    year <- input$report_year
+
+    report_data <-
+      data |>
+      filter(month(month) %in% months, year(month) == year) |>
+      group_by(month)
+
+    conversations <-
+      group_by(report_data, month, email_address) |>
+      summarise(
+        n_meaningful = sum(n_meaningful),
+        n_general = sum(n_general)
+      )
+
+    counts <-
+      group_by(report_data, month, email_address) |>
+      summarise(across(starts_with(c("people_", "concerns_")), sum))
+
+    report_data <- left_join(conversations, counts, by = c("email_address", "month"))
+
+    rm(conversations, counts)
+
+    ## generate reports
+    report_data <- group_by(report_data, month)
+    report_months <- group_keys(report_data)[["month"]]
+
+    report_data <-
+      group_split(report_data) |>
+      set_names(nm = report_months)
+
+    tmp <- dir_create("tmp")
+
+    iwalk(report_data,
+          \(data, month){
+
+            file_name <- str_c("monthly-summary", month, sep = "_")
+            file_path <- path(tmp, file_name, ext = ".csv")
+
+            vroom_write(data, file_path, delim = ",")
+
+            drive_path <- path("waterways chaplains reporting", file_name, ext = ".csv")
+            drive_put(file_path, path = drive_path)
+
+          })
   })
 
   ## outputs for page 1: -------------------------------------------------------
