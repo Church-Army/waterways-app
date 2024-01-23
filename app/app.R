@@ -14,14 +14,15 @@ library(scales)
 library(RColorBrewer)
 library(snakecase)
 library(forcats)
+library(digest)
 library(shinyWidgets)
+
 
 #### THIS CODE ALWAYS RUNS #####################################################
 
 # credentials and authentication -----------------------------------------------
 gs4_deauth()
 
-is_app_dir <- file_exists(here(".appDir"))
 auth_cache <- "secrets"
 gs4_auth(email = TRUE, cache = auth_cache)
 
@@ -51,6 +52,7 @@ fill_colours <-
     "#673770", "#D3D93E", "#38333E", "#508578", "#D7C1B1", "#689030", "#AD6F3B", "#CD9BCD",
     "#D14285", "#6DDE88", "#652926", "#7FDCC0", "#C84248", "#8569D5", "#5E738F", "#D1A33D",
     "#8A7C64", "#599861")
+
 # attempt to read sheet --------------------------------------------------------
 secret_sheet <- "14qI8A51Op2Ri3yfwD1t2AQZ1fxki-KUFb7_EEyvO4Lo"
 data <- tryCatch(read_sheet(secret_sheet), error = identity)
@@ -158,7 +160,6 @@ concerns_picker <- function(...,
     ))
 }
 
-
 ui <- fluidPage(
   tabsetPanel(
 
@@ -193,18 +194,47 @@ ui <- fluidPage(
                mainPanel(plotOutput("horizontal_concerns_bar", height = "600px"))
              ),
 
-    tabPanel(
-      "Download data",
-      downloadButton("xlsx_download", "Download data")
-    ),
+    tabPanel("Detailed graphs and tables"),
 
-    tabPanel("Detailed graphs and tables")
+    tabPanel(
+      "Admin area",
+      passwordInput("admin_password", label = NULL, placeholder = "password"),
+      actionButton("password_entry", "Enter password"),
+      textOutput("password_msg"),
+      uiOutput("admin_area")
+      )
+    )
   )
-)
 
 #### SERVER ####################################################################
 
 server <- function(input, output) {
+
+  valid_password <- reactiveVal(FALSE)
+
+  observeEvent(input$password_entry,{
+
+    password <- readLines("secrets/admin_password")
+
+    hash <- sha1(input$admin_password)
+
+    if(hash == password){
+      valid_password(TRUE)
+      output$password_msg <- renderText("Password accepted")
+    } else{
+      valid_password(FALSE)
+      output$password_msg <- renderText("Incorrect password")
+      }
+})
+
+  output$admin_area <- renderUI({
+    if(valid_password()){
+      downloadButton("xlsx_download", "Download data")
+    } else {
+      renderText("Please enter a valid password to access this area of the site")
+    }
+
+  })
 
   ## outputs for page 1: -------------------------------------------------------
   output$total_meaningful <- renderText({
@@ -255,7 +285,7 @@ server <- function(input, output) {
       geom_line(colour = "gray60", alpha = 0.35) +
 
       geom_line(data = highlight, aes(x = month, y = count, colour = concern),
-                size = 2, alpha = 0.85) +
+                linewidth = 2, alpha = 0.85) +
 
       scale_colour_discrete() +
 
@@ -312,10 +342,16 @@ server <- function(input, output) {
   ## Horizontal concerns plot --------------------------------------------------
   output$horizontal_concerns_bar <- renderPlot({
     ## apply sidebar preferences
+
+    if(!is.null(input$concerns_hbar_daterange[1])){
     very_concise_concerns <-
       filter(very_concise_concerns,
              between(month, input$concerns_hbar_daterange[1],
                      input$concerns_hbar_daterange[2]))
+    }
+
+    very_concise_concerns <-
+      summarise(very_concise_concerns, count = sum(count), .by = concern)
 
     if(input$is_concerns_pie){
       plot_out <-
@@ -364,6 +400,35 @@ server <- function(input, output) {
       scale_fill_manual(values = fill_colours)
 
   })
+
+  ## Pie chart people plot -----------------------------------------------------
+
+  ggplot(very_concise_people, aes(x = people, y = count, fill = people)) +
+
+    geom_col(width = 1) +
+
+    theme(axis.line = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_blank()) +
+
+    theme_minimal() +
+
+    scale_fill_manual(values = rep(brewer.pal(12, "Set3"), length.out = nrow(very_concise_people))) +
+
+    theme_ca("black") +
+
+    labs(x = "", y = "",
+         title = "Who are we talking to?") +
+
+    theme(legend.position = "none") +
+
+    scale_x_discrete(labels = ~ str_remove(.x, "people")  |>
+                       str_replace("wo_men", "women") |>
+                       to_title_case()) +
+
+    coord_polar()
+
 
 }
 
