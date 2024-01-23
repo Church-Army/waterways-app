@@ -229,7 +229,10 @@ server <- function(input, output) {
 
   output$admin_area <- renderUI({
     if(valid_password()){
-      downloadButton("xlsx_download", "Download data")
+      fluidRow(
+      downloadButton("xlsx_download", "Download data"),
+      actionButton("generate_reports", "Generate monthly reports")
+      )
     } else {
       renderText("Please enter a valid password to access this area of the site")
     }
