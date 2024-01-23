@@ -214,7 +214,7 @@ server <- function(input, output) {
 
   valid_password <- reactiveVal(FALSE)
 
-  observeEvent("password_entry",{
+  observeEvent(input$password_entry,{
 
     password <- readLines("secrets/admin_password")
 
@@ -222,11 +222,12 @@ server <- function(input, output) {
 
     if(hash == password){
       valid_password(TRUE)
+      output$password_msg <- renderText("Password accepted")
     } else{
       valid_password(FALSE)
       output$password_msg <- renderText("Incorrect password")
-    }
-  })
+      }
+})
 
   output$admin_area <- renderUI({
     if(valid_password()){
@@ -344,10 +345,16 @@ server <- function(input, output) {
   ## Horizontal concerns plot --------------------------------------------------
   output$horizontal_concerns_bar <- renderPlot({
     ## apply sidebar preferences
+
+    if(!is.null(input$concerns_hbar_daterange[1])){
     very_concise_concerns <-
       filter(very_concise_concerns,
              between(month, input$concerns_hbar_daterange[1],
                      input$concerns_hbar_daterange[2]))
+    }
+
+    very_concise_concerns <-
+      summarise(very_concise_concerns, count = sum(count), .by = concern)
 
     if(input$is_concerns_pie){
       plot_out <-
