@@ -1,0 +1,95 @@
+---
+title: "Easier waterways graph"
+format: html
+editor: visual
+---
+
+## Quarto
+
+```{r setting_up}
+library(ggplot2)
+library(snakecase)
+library(RColorBrewer)
+
+secret_sheet <- "14qI8A51Op2Ri3yfwD1t2AQZ1fxki-KUFb7_EEyvO4Lo"
+data <- tryCatch(read_sheet(secret_sheet), error = identity)
+
+if(is.data.frame(data)){
+  
+  data <- clean_names(data)
+
+  data <- rename(data,
+                 month = in_what_month_of_the_year_did_these_conversations_take_place,
+                 n_meaningful = how_many_meaningful_conversations_have_you_had_within_the_reporting_period,
+                 n_general    = how_many_general_conversations_have_you_had_within_the_reporting_period,
+                 people       = how_would_you_describe_the_people_you_have_spoken_to_please_tick_all_that_apply,
+                 concerns     = which_of_the_following_concerns_were_identified_by_your_conversations,
+                 comments     = do_you_have_any_other_comments_about_your_recent_interactions_that_you_would_like_to_share)
+
+  ## Tally counts from comma-delimited string columns (widening data) ----------
+
+  data <- mutate(data, across(c(people, concerns), str_to_lower))
+
+  data <- tally_delimited_string(data, people)
+  data <- tally_delimited_string(data, concerns)
+}
+
+all_months <-
+  c("January", "February", "March", "April", "May",
+    "June", "July", "August", "September", "October",
+    "November", "December")
+```
+
+```{r what_are_we_talking_about}
+ggplot(very_concise_concerns, aes(x = count, y = reorder(concern, count), fill = concern)) +
+  
+  geom_col() +
+  
+  theme_minimal() +
+  
+  scale_fill_manual(values = rep(brewer.pal(12, "Set3"), length.out = nrow            (very_concise_concerns))) +
+
+  labs(x = "Count", y = "Conversation topics", title = "What are we talking about?") +
+
+  theme_ca("black") +
+
+  theme(legend.position = "none") +
+
+  scale_y_discrete(
+  
+    labels = \(x){
+    str_remove(x, "concerns_") |> 
+      str_replace("un_employment", "unemployment") |> 
+      to_title_case() |> 
+      str_replace("Ptsd", "PTSD")
+  }
+)
+```
+
+```{r pie_chart}
+ggplot(very_concise_people, aes(x = people, y = count, fill = people)) +
+
+geom_col(width = 1) +
+
+theme(axis.line = element_blank(),          
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.border = element_blank()) +
+  
+theme_minimal() +
+  
+scale_fill_manual(values = rep(brewer.pal(12, "Set3"), length.out = nrow(very_concise_people))) +
+  
+ theme_ca("black") +
+
+labs(x = "", y = "",
+       title = "Who are we talking to?") +
+  
+theme(legend.position = "none") +
+    
+scale_x_discrete(labels = ~ str_remove(.x, "people")  |>  
+                                str_replace("wo_men", "women") |> 
+                                to_title_case()) + 
+ 
+coord_polar()
+```

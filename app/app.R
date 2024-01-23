@@ -185,7 +185,9 @@ ui <- fluidPage(
                  width = 10
                  ))))),
 
-    tabPanel("Who are we talking to?"),
+    tabPanel("Who are we talking to?",
+             plotOutput("people_pie_chart")
+             ),
 
 
     ## WHAT ARE WE TALKING ABOUT? ==============================================
@@ -406,31 +408,47 @@ server <- function(input, output) {
 
   ## Pie chart people plot -----------------------------------------------------
 
-  ggplot(very_concise_people, aes(x = people, y = count, fill = people)) +
+  very_concise_people <-
+    data |>
+    pivot_longer(starts_with("people_"),
+                 names_to = "people",
+                 values_to = "indicated") |>
+    summarise(count = sum(indicated),
+              .by = c(month, people)) |>
+    mutate(people =
+             str_remove(people, "people_") |>
+             capitalise() |>
+             str_replace_all("_", " ") |>
+             ordered())
 
-    geom_col(width = 1) +
+  people_pie <-
+
+    ggplot(very_concise_people, aes(x = 1, y = count, fill = people)) +
+
+    geom_col(width = 0.7) +
+
+    scale_fill_manual(values = rep(brewer.pal(12, "Set3"), length.out = nrow(very_concise_people))) +
+
+    scale_x_continuous(breaks = 1, labels = "All People") +
+
+    scale_x_discrete(labels =
+                       \(x){
+                         str_remove(x, "people")  |>
+                           str_replace("wo_men", "women") |>
+                           to_title_case()
+                         }) +
+
+    coord_polar("y") +
+
+    theme_ca("black") +
 
     theme(axis.line = element_blank(),
           panel.grid.major = element_blank(),
           panel.grid.minor = element_blank(),
-          panel.border = element_blank()) +
+          panel.border = element_blank(),
+          legend.position = "none")
 
-    theme_minimal() +
-
-    scale_fill_manual(values = rep(brewer.pal(12, "Set3"), length.out = nrow(very_concise_people))) +
-
-    theme_ca("black") +
-
-    labs(x = "", y = "",
-         title = "Who are we talking to?") +
-
-    theme(legend.position = "none") +
-
-    scale_x_discrete(labels = ~ str_remove(.x, "people")  |>
-                       str_replace("wo_men", "women") |>
-                       to_title_case()) +
-
-    coord_polar()
+  output$people_pie_chart <- renderPlot({people_pie})
 
 
 }
