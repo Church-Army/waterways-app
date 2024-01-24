@@ -298,11 +298,11 @@ server <- function(input, output) {
           \(data, month){
 
             file_name <- str_c("monthly-summary", month, sep = "_")
-            file_path <- path(tmp, file_name, ext = ".csv")
+            file_path <- path(tmp, file_name, ext = "csv")
 
             vroom_write(data, file_path, delim = ",")
 
-            drive_path <- path("waterways chaplains reporting", file_name, ext = ".csv")
+            drive_path <- path("waterways chaplains reporting", file_name, ext = "csv")
             drive_put(file_path, path = drive_path)
 
           })
