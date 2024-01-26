@@ -347,15 +347,13 @@ server <- function(input, output) {
           \(data, month){
 
             file_name <- str_c(file_prefix, month, sep = "_")
-            file_path <- path(tmp, file_name, ext = "csv")
 
-            vroom_write(data, file_path, delim = ",")
+            report_sheet <- gs4_create(file_name, sheets = data)
 
             drive_path <- path("waterways chaplains reporting",
-                               drive_dir,
-                               file_name, ext = "csv")
+                               drive_dir, file_name)
 
-            drive_put(file_path, path = drive_path)
+            drive_mv(report_sheet, path = drive_path, overwrite = TRUE)
 
           })
 
