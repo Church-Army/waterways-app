@@ -257,9 +257,12 @@ server <- function(input, output) {
           radioButtons("report_year", "Year",
                        choices = -1:1 + year(today()),
                        selected = year(today()),
-                       inline = TRUE)
+                       inline = TRUE),
+          checkboxInput("separate_reports", "Generate a separate report for each month",
+                        value = TRUE)
         ),
-        actionButton("generate_reports", "Generate monthly reports")
+        actionButton("generate_reports", "Generate monthly reports"),
+        verbatimTextOutput("report_gen_message")
       )
     } else {
       renderText("Please enter a valid password to access this area of the site")
@@ -269,6 +272,12 @@ server <- function(input, output) {
 
   ## Generate reports on button press ------------------------------------------
   observeEvent(input$generate_reports, {
+
+    showModal(
+      modalDialog("Generating reports...",
+                  easyClose = TRUE)
+      )
+
     months <- match(input$report_months, month.name)
     year <- input$report_year
 
@@ -293,12 +302,23 @@ server <- function(input, output) {
     rm(conversations, counts)
 
     ## generate reports
+    if(input$separate_reports){
     report_data <- group_by(report_data, month)
     report_months <- group_keys(report_data)[["month"]]
 
     report_data <-
       group_split(report_data) |>
       set_names(nm = report_months)
+    } else {
+      month_range_label <-
+        str_c(
+          min(report_data[["month"]]), "to", max(report_data[["month"]]),
+          sep = "-"
+          )
+
+      report_data <- list(report_data)
+      names(report_data) <- month_range_label
+    }
 
     tmp <- dir_create("tmp")
 
@@ -310,10 +330,22 @@ server <- function(input, output) {
 
             vroom_write(data, file_path, delim = ",")
 
-            drive_path <- path("waterways chaplains reporting", file_name, ext = "csv")
+            drive_path <- path("waterways chaplains reporting",
+                               "Monthly summary reports",
+                               file_name, ext = "csv")
+
             drive_put(file_path, path = drive_path)
 
           })
+
+    removeModal()
+
+    output$report_gen_message <- renderPrint({
+      reports <- length(report_data)
+      cat("Generated", reports, "report(s) with the following name(s):\n")
+      cat(str_c("monthly-summary", names(report_data), sep = "_"), sep = "\n")
+      cat("\nThese reports can be found in the Google Drive folder 'waterways chaplains reporting/Monthly summary reports'.")
+    })
 
     dir_delete("tmp")
   })
