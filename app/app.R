@@ -84,6 +84,14 @@ if(is.data.frame(data)){
 
   ## Converting conversations to numeric ---------------------------------------
 
+  data <- mutate(data,
+                 across(where(is.list),
+                        \(x){
+                          modify_if(x, is.null, \(y) NA) |>
+                            as.character()
+                        })
+  )
+
   conversation_responses <- c("None", "One", "Two", "Three", "Four", "Five or more")
 
   data <- mutate(
