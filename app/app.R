@@ -258,6 +258,10 @@ server <- function(input, output) {
                        choices = -1:1 + year(today()),
                        selected = year(today()),
                        inline = TRUE),
+          selectInput("report_type", "What kind of report should be generated?",
+                      choices = c("Comprehensive reports", "'Other comments' reports"),
+                      selected =  "Comprehensive reports"),
+          p("Comprehensive reports include summary data for each respondent for each month specified. 'Other comments' reports show all 'other comments' responses for the selected timeframe."),
           checkboxInput("separate_reports", "Generate a separate report for each month",
                         value = TRUE)
         ),
@@ -286,18 +290,35 @@ server <- function(input, output) {
       filter(month(month) %in% months, year(month) == year) |>
       group_by(month)
 
-    conversations <-
-      group_by(report_data, month, email_address) |>
-      summarise(
-        n_meaningful = sum(n_meaningful),
-        n_general = sum(n_general)
-      )
 
-    counts <-
-      group_by(report_data, month, email_address) |>
-      summarise(across(starts_with(c("people_", "concerns_")), sum))
+    if(isolate(input$report_type) == "Comprehensive reports"){
 
-    report_data <- left_join(conversations, counts, by = c("email_address", "month"))
+      drive_dir <- "Monthly summary reports"
+      file_prefix <- "monthly-summary"
+
+      conversations <-
+        group_by(report_data, month, email_address) |>
+        summarise(
+          n_meaningful = sum(n_meaningful),
+          n_general = sum(n_general)
+        )
+
+      counts <-
+        group_by(report_data, month, email_address) |>
+        summarise(across(starts_with(c("people_", "concerns_")), sum))
+
+      report_data <- left_join(conversations, counts, by = c("email_address", "month"))
+
+    } else if(isolate(input$report_type) == "'Other comments' reports"){
+
+      drive_dir <- "'Other comments' reports"
+      file_prefix <- "comments"
+
+      report_data <-
+        select(report_data, email_address, month, comments) |>
+        filter(!is.na(comments))
+
+    }
 
     rm(conversations, counts)
 
@@ -325,13 +346,13 @@ server <- function(input, output) {
     iwalk(report_data,
           \(data, month){
 
-            file_name <- str_c("monthly-summary", month, sep = "_")
+            file_name <- str_c(file_prefix, month, sep = "_")
             file_path <- path(tmp, file_name, ext = "csv")
 
             vroom_write(data, file_path, delim = ",")
 
             drive_path <- path("waterways chaplains reporting",
-                               "Monthly summary reports",
+                               drive_dir,
                                file_name, ext = "csv")
 
             drive_put(file_path, path = drive_path)
@@ -343,8 +364,10 @@ server <- function(input, output) {
     output$report_gen_message <- renderPrint({
       reports <- length(report_data)
       cat("Generated", reports, "report(s) with the following name(s):\n")
-      cat(str_c("monthly-summary", names(report_data), sep = "_"), sep = "\n")
-      cat("\nThese reports can be found in the Google Drive folder 'waterways chaplains reporting/Monthly summary reports'.")
+      cat(str_c(file_prefix, names(report_data), sep = "_"), sep = "\n")
+      cat("\nThese reports can be found in the Google Drive folder 'waterways chaplains reporting/",
+          drive_dir, "'.",
+          sep = "")
     })
 
     dir_delete("tmp")
