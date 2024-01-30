@@ -66,12 +66,17 @@ if(is.data.frame(data)){
   data <- clean_names(data)
 
   data <- rename(data,
-                 month = in_what_month_of_the_year_did_these_conversations_take_place,
+                 month        = in_what_month_of_the_year_did_these_conversations_take_place,
+                 hub          = which_hub_are_you_reporting_from,
                  n_meaningful = how_many_meaningful_conversations_have_you_had_within_the_reporting_period,
                  n_general    = how_many_general_conversations_have_you_had_within_the_reporting_period,
                  people       = how_would_you_describe_the_people_you_have_spoken_to_please_tick_all_that_apply,
                  concerns     = which_of_the_following_concerns_were_identified_by_your_conversations,
                  comments     = do_you_have_any_other_comments_about_your_recent_interactions_that_you_would_like_to_share)
+
+  data <-
+    relocate(data, hub, .after = month) |>
+    mutate(hub  = factor(hub))
 
   ## Tally counts from comma-delimited string columns (widening data) ----------
 
@@ -154,7 +159,8 @@ if(is.data.frame(data)){
 concerns_picker <- function(...,
                             prefix,
                             choices = NULL,
-                            randomly_select = length(choices)){
+                            randomly_select = length(choices),
+                            hubs = NULL){
   sidebarPanel(
     ...,
     dateRangeInput(
@@ -165,12 +171,21 @@ concerns_picker <- function(...,
       min = "2022-01-01",
       max = today()),
 
+    if(!is.null(hubs)){
+      selectInput(
+        str_c(prefix, "_hubs"),
+        "Hub:",
+        choices = c("All", sort(hubs)),
+        selected = "All"
+      )},
+
     checkboxGroupInput(
       str_c(prefix, "_highlight"),
       "Concerns to highlight:",
       choices = choices,
       selected = sample(choices, randomly_select)
-    ))
+      )
+    )
 }
 
 ui <- fluidPage(
@@ -209,7 +224,10 @@ ui <- fluidPage(
                mainPanel(plotOutput("horizontal_concerns_bar", height = "600px"))
              ),
 
-    tabPanel("Detailed graphs and tables"),
+    tabPanel("Stories and other comments",
+             br(),br(),
+             p("Stories and other comments collected through the reporting form are reviewed by hub leaders.\nThey cannot be viewed here because they may contain sensitive or confidential information.")
+    ),
 
     tabPanel(
       "Admin area",
@@ -457,8 +475,6 @@ server <- function(input, output) {
     pivot_longer(starts_with("concerns_"),
                  names_to = "concern",
                  values_to = "indicated") |>
-    summarise(count = sum(indicated),
-              .by = c(month, concern)) |>
     mutate(concern =
              str_remove(concern, "concerns_") |>
              capitalise() |>
@@ -469,6 +485,7 @@ server <- function(input, output) {
     concerns_picker(prefix = "concerns_hbar",
                     choices = unique(very_concise_concerns[["concern"]]),
                     width = 2,
+                    hubs = unique(as.character(very_concise_concerns[["hub"]])),
                     switchInput("is_concerns_pie",
                                 label = "Switch to:",
                                 onLabel = "Bar chart",
@@ -477,6 +494,18 @@ server <- function(input, output) {
   ## Horizontal concerns plot --------------------------------------------------
   output$horizontal_concerns_bar <- renderPlot({
     ## apply sidebar preferences
+
+    if(!is.null(input$concerns_hbar_hubs) && !input$concerns_hbar_hubs == "All"){
+      very_concise_concerns <-
+        filter(very_concise_concerns, hub %in% input$concerns_hbar_hubs) |>
+        summarise(count = sum(indicated),
+                  .by = c(month, concern, hub))
+    } else {
+      very_concise_concerns <-
+        summarise(very_concise_concerns,
+                  count = sum(indicated),
+                  .by = c(month, concern))
+    }
 
     if(!is.null(input$concerns_hbar_daterange[1])){
     very_concise_concerns <-
