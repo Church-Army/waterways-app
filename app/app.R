@@ -523,6 +523,7 @@ server <- function(input, output) {
                concern = fct_other(concern, keep = input$concerns_hbar_highlight)) |>
         summarise(count = sum(count), .by = concern) |>
         mutate(prop = count/sum(count)) |>
+        filter(prop > 0) |>
 
         ggplot(aes(x = 1, y = count, fill = concern)) +
 
@@ -546,7 +547,9 @@ server <- function(input, output) {
     } else {
 
       plot_out <-
-      filter(very_concise_concerns, concern %in% input$concerns_hbar_highlight) |>
+      filter(very_concise_concerns,
+             concern %in% input$concerns_hbar_highlight,
+             count > 0) |>
         ggplot(aes(x = count, y = reorder(concern, count), fill = concern)) +
 
         geom_col() +
