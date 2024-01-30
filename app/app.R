@@ -66,12 +66,17 @@ if(is.data.frame(data)){
   data <- clean_names(data)
 
   data <- rename(data,
-                 month = in_what_month_of_the_year_did_these_conversations_take_place,
+                 month        = in_what_month_of_the_year_did_these_conversations_take_place,
+                 hub          = which_hub_are_you_reporting_from,
                  n_meaningful = how_many_meaningful_conversations_have_you_had_within_the_reporting_period,
                  n_general    = how_many_general_conversations_have_you_had_within_the_reporting_period,
                  people       = how_would_you_describe_the_people_you_have_spoken_to_please_tick_all_that_apply,
                  concerns     = which_of_the_following_concerns_were_identified_by_your_conversations,
                  comments     = do_you_have_any_other_comments_about_your_recent_interactions_that_you_would_like_to_share)
+
+  data <-
+    relocate(data, hub, .after = month) |>
+    mutate(hub  = factor(hub))
 
   ## Tally counts from comma-delimited string columns (widening data) ----------
 
@@ -83,6 +88,14 @@ if(is.data.frame(data)){
   data <- mutate(data, response_id = str_c("r_", row_number()))
 
   ## Converting conversations to numeric ---------------------------------------
+
+  data <- mutate(data,
+                 across(where(is.list),
+                        \(x){
+                          modify_if(x, is.null, \(y) NA) |>
+                            as.character()
+                        })
+  )
 
   conversation_responses <- c("None", "One", "Two", "Three", "Four", "Five or more")
 
@@ -146,7 +159,8 @@ if(is.data.frame(data)){
 concerns_picker <- function(...,
                             prefix,
                             choices = NULL,
-                            randomly_select = length(choices)){
+                            randomly_select = length(choices),
+                            hubs = NULL){
   sidebarPanel(
     ...,
     dateRangeInput(
@@ -157,12 +171,21 @@ concerns_picker <- function(...,
       min = "2022-01-01",
       max = today()),
 
+    if(!is.null(hubs)){
+      selectInput(
+        str_c(prefix, "_hubs"),
+        "Hub:",
+        choices = c("All", sort(hubs)),
+        selected = "All"
+      )},
+
     checkboxGroupInput(
       str_c(prefix, "_highlight"),
       "Concerns to highlight:",
       choices = choices,
       selected = sample(choices, randomly_select)
-    ))
+      )
+    )
 }
 
 ui <- fluidPage(
@@ -201,7 +224,10 @@ ui <- fluidPage(
                mainPanel(plotOutput("horizontal_concerns_bar", height = "600px"))
              ),
 
-    tabPanel("Detailed graphs and tables"),
+    tabPanel("Stories and other comments",
+             br(),br(),
+             p("Stories and other comments collected through the reporting form are reviewed by hub leaders.\nThey cannot be viewed here because they may contain sensitive or confidential information.")
+    ),
 
     tabPanel(
       "Admin area",
@@ -249,9 +275,16 @@ server <- function(input, output) {
           radioButtons("report_year", "Year",
                        choices = -1:1 + year(today()),
                        selected = year(today()),
-                       inline = TRUE)
+                       inline = TRUE),
+          selectInput("report_type", "What kind of report should be generated?",
+                      choices = c("Comprehensive reports", "'Other comments' reports"),
+                      selected =  "Comprehensive reports"),
+          p("Comprehensive reports include summary data for each respondent for each month specified. 'Other comments' reports show all 'other comments' responses for the selected timeframe."),
+          checkboxInput("separate_reports", "Generate a separate report for each month",
+                        value = TRUE)
         ),
-        actionButton("generate_reports", "Generate monthly reports")
+        actionButton("generate_reports", "Generate monthly reports"),
+        verbatimTextOutput("report_gen_message")
       )
     } else {
       renderText("Please enter a valid password to access this area of the site")
@@ -261,6 +294,12 @@ server <- function(input, output) {
 
   ## Generate reports on button press ------------------------------------------
   observeEvent(input$generate_reports, {
+
+    showModal(
+      modalDialog("Generating reports...",
+                  easyClose = TRUE)
+      )
+
     months <- match(input$report_months, month.name)
     year <- input$report_year
 
@@ -269,43 +308,83 @@ server <- function(input, output) {
       filter(month(month) %in% months, year(month) == year) |>
       group_by(month)
 
-    conversations <-
-      group_by(report_data, month, email_address) |>
-      summarise(
-        n_meaningful = sum(n_meaningful),
-        n_general = sum(n_general)
-      )
 
-    counts <-
-      group_by(report_data, month, email_address) |>
-      summarise(across(starts_with(c("people_", "concerns_")), sum))
+    if(isolate(input$report_type) == "Comprehensive reports"){
 
-    report_data <- left_join(conversations, counts, by = c("email_address", "month"))
+      drive_dir <- "Monthly summary reports"
+      file_prefix <- "monthly-summary"
+
+      conversations <-
+        group_by(report_data, month, email_address) |>
+        summarise(
+          n_meaningful = sum(n_meaningful),
+          n_general = sum(n_general)
+        )
+
+      counts <-
+        group_by(report_data, month, email_address) |>
+        summarise(across(starts_with(c("people_", "concerns_")), sum))
+
+      report_data <- left_join(conversations, counts, by = c("email_address", "month"))
+
+    } else if(isolate(input$report_type) == "'Other comments' reports"){
+
+      drive_dir <- "'Other comments' reports"
+      file_prefix <- "comments"
+
+      report_data <-
+        select(report_data, email_address, month, comments) |>
+        filter(!is.na(comments))
+
+    }
 
     rm(conversations, counts)
 
     ## generate reports
+    if(input$separate_reports){
     report_data <- group_by(report_data, month)
     report_months <- group_keys(report_data)[["month"]]
 
     report_data <-
       group_split(report_data) |>
       set_names(nm = report_months)
+    } else {
+      month_range_label <-
+        str_c(
+          min(report_data[["month"]]), "to", max(report_data[["month"]]),
+          sep = "-"
+          )
+
+      report_data <- list(report_data)
+      names(report_data) <- month_range_label
+    }
 
     tmp <- dir_create("tmp")
 
     iwalk(report_data,
           \(data, month){
 
-            file_name <- str_c("monthly-summary", month, sep = "_")
-            file_path <- path(tmp, file_name, ext = "csv")
+            file_name <- str_c(file_prefix, month, sep = "_")
 
-            vroom_write(data, file_path, delim = ",")
+            report_sheet <- gs4_create(file_name, sheets = data)
 
-            drive_path <- path("waterways chaplains reporting", file_name, ext = "csv")
-            drive_put(file_path, path = drive_path)
+            drive_path <- path("waterways chaplains reporting",
+                               drive_dir, file_name)
+
+            drive_mv(report_sheet, path = drive_path, overwrite = TRUE)
 
           })
+
+    removeModal()
+
+    output$report_gen_message <- renderPrint({
+      reports <- length(report_data)
+      cat("Generated", reports, "report(s) with the following name(s):\n")
+      cat(str_c(file_prefix, names(report_data), sep = "_"), sep = "\n")
+      cat("\nThese reports can be found in the Google Drive folder 'waterways chaplains reporting/",
+          drive_dir, "'.",
+          sep = "")
+    })
 
     dir_delete("tmp")
   })
@@ -396,8 +475,6 @@ server <- function(input, output) {
     pivot_longer(starts_with("concerns_"),
                  names_to = "concern",
                  values_to = "indicated") |>
-    summarise(count = sum(indicated),
-              .by = c(month, concern)) |>
     mutate(concern =
              str_remove(concern, "concerns_") |>
              capitalise() |>
@@ -408,6 +485,7 @@ server <- function(input, output) {
     concerns_picker(prefix = "concerns_hbar",
                     choices = unique(very_concise_concerns[["concern"]]),
                     width = 2,
+                    hubs = unique(as.character(very_concise_concerns[["hub"]])),
                     switchInput("is_concerns_pie",
                                 label = "Switch to:",
                                 onLabel = "Bar chart",
@@ -416,6 +494,18 @@ server <- function(input, output) {
   ## Horizontal concerns plot --------------------------------------------------
   output$horizontal_concerns_bar <- renderPlot({
     ## apply sidebar preferences
+
+    if(!is.null(input$concerns_hbar_hubs) && !input$concerns_hbar_hubs == "All"){
+      very_concise_concerns <-
+        filter(very_concise_concerns, hub %in% input$concerns_hbar_hubs) |>
+        summarise(count = sum(indicated),
+                  .by = c(month, concern, hub))
+    } else {
+      very_concise_concerns <-
+        summarise(very_concise_concerns,
+                  count = sum(indicated),
+                  .by = c(month, concern))
+    }
 
     if(!is.null(input$concerns_hbar_daterange[1])){
     very_concise_concerns <-
