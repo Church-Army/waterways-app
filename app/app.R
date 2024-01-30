@@ -410,26 +410,34 @@ server <- function(input, output) {
     # be daily or monthly. It's hard to get Google forms to allow people to tally
     # occurrences ongoingly, so currently this seems like the most responsible way
     # to report
-    summarise(occured = any(identified), .by = c(concern, email_address, month)) |>
-    summarise(count = sum(occured), .by = c(concern, month)) |>
-    mutate(concern =
-             prettify(concern) |>
-             ordered() |>
-             fct_reorder(-count))
-
-
+    summarise(occured = any(identified), .by = c(concern, email_address, month, hub)) |>
+    mutate(concern = prettify(concern))
 
   output$concerns_picker_mainpage <- renderUI({
     concerns_picker(prefix = "concerns_mainpage",
                     choices = unique(mainpage_plot_data[["concern"]]),
                     randomly_select = 2,
+                    hubs = as.character(unique(mainpage_plot_data[["hub"]])),
                     width = 2)
   })
 
   output$concerns_plot <- renderPlot({
 
+    if(is.null(input$concerns_mainpage_hubs) || input$concerns_mainpage_hubs == "All"){
+      mainpage_hub <- as.character(unique(mainpage_plot_data[["hub"]]))
+    } else mainpage_hub <- input$concerns_mainpage_hubs
+
+    mainpage_plot_data <-
+      filter(mainpage_plot_data, hub %in% mainpage_hub) |>
+      summarise(count = sum(occured), .by = c(concern, month)) |>
+      mutate(concern =
+               ordered(concern) |>
+               fct_reorder(-count))
+
     highlight <- filter(mainpage_plot_data, concern %in% input$concerns_mainpage_highlight)
     lowlight  <- filter(mainpage_plot_data, !concern %in% input$concerns_mainpage_highlight)
+
+
 
     ggplot(lowlight, aes(x = month, y = count, group = concern)) +
 
@@ -515,7 +523,9 @@ server <- function(input, output) {
     very_concise_concerns <-
       summarise(very_concise_concerns, count = sum(count), .by = concern)
 
-    if(input$is_concerns_pie){
+    if(is.null(input$is_concerns_pie)){
+      plot_out <- ggplot()
+    }else if(input$is_concerns_pie){
       plot_out <-
         mutate(very_concise_concerns,
                concern = fct_other(concern, keep = input$concerns_hbar_highlight)) |>
