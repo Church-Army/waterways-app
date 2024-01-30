@@ -398,8 +398,6 @@ server <- function(input, output) {
     as.character(sum(data[["n_general"]], na.rm = TRUE))
   })
 
-
-  output$horizontal_concerns_bar <- renderPlot({ggplot()})
   mainpage_plot_data <-
     generalised_data |>
     pivot_longer(starts_with("concern_"),
