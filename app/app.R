@@ -82,8 +82,24 @@ if(is.data.frame(data)){
 
   data <- mutate(data, across(c(people, concerns), str_to_lower))
 
-  data <- tally_delimited_string(data, people)
-  data <- tally_delimited_string(data, concerns)
+  data <- tally_delimited_string(data, people,
+                                 keep =
+                                   str_to_lower(
+                                     c("Ex HM forces", "Fisher(wo)men", "Homeless", "Leisure hirers/visitors",
+                                          "Leisure owners", "Liveaboards", "Navigation authority staff or volunteers",
+                                          "Towpath users", "Waterside business staff", "Waterside residents")
+                                     ),
+                                 other_col = other_people,
+                                 ) |>
+    rename(people_fisher_men_women = people_fisher_wo_men)
+
+  data <- tally_delimited_string(data, concerns,
+                                 keep = c("financial hardship/benefits", "physical health", "mental health",
+                                          "suicidal thoughts", "ptsd", "faith and religion", "boat worthiness",
+                                          "boat licensing and mooring", "addiction (alcohol and/or drugs)",
+                                          "homelessness", "personal relationships", "(un)employment",
+                                          "crime", "death and bereavement", "moving onto land"),
+                                 other_col = other_concerns)
 
   data <- mutate(data, response_id = str_c("r_", row_number()))
 
@@ -214,7 +230,7 @@ ui <- fluidPage(
                  ))))),
 
     tabPanel("Who are we talking to?",
-             plotOutput("people_pie_chart")
+             plotOutput("people_pie_chart", height = "550px")
              ),
 
 
@@ -584,20 +600,30 @@ server <- function(input, output) {
                  names_to = "people",
                  values_to = "indicated") |>
     summarise(count = sum(indicated),
-              .by = c(month, people)) |>
+              .by = c(people)) |>
     mutate(people =
              str_remove(people, "people_") |>
              capitalise() |>
              str_replace_all("_", " ") |>
-             ordered())
+             ordered()) |>
+    mutate(prop = count/sum(count))
 
   people_pie <-
 
     ggplot(very_concise_people, aes(x = 1, y = count, fill = people)) +
 
-    geom_col(width = 0.7) +
+    geom_col(width = 0.7, colour = "black") +
 
-    scale_fill_manual(values = rep(brewer.pal(12, "Set3"), length.out = nrow(very_concise_people))) +
+    geom_text(
+      aes(label = label_percent(0.1)(prop),
+          x = 1.45),
+      size = 5,
+      position = position_stack(0.5)
+    ) +
+
+    scale_fill_manual(
+      name = "Who are we talking to?",
+      values = rep(brewer.pal(12, "Set3"), length.out = nrow(very_concise_people))) +
 
     scale_x_continuous(breaks = 1, labels = "All People") +
 
@@ -610,13 +636,18 @@ server <- function(input, output) {
 
     coord_polar("y") +
 
+    labs(
+      x = NULL,
+      y = NULL,
+    ) +
+
     theme_ca("black") +
 
     theme(axis.line = element_blank(),
           panel.grid.major = element_blank(),
           panel.grid.minor = element_blank(),
           panel.border = element_blank(),
-          legend.position = "none")
+          axis.text = element_blank())
 
   output$people_pie_chart <- renderPlot({people_pie})
 
