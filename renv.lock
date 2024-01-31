@@ -186,7 +186,7 @@
       "RemoteRepo": "carutools",
       "RemoteUsername": "church-army",
       "RemoteRef": "HEAD",
-      "RemoteSha": "507ee7b656aabe431f750b10c75ab9303e64b936",
+      "RemoteSha": "778379ac96f7d0826a53872daf085b10d5e3ba00",
       "Requirements": [
         "dplyr",
         "extrafont",
@@ -196,7 +196,7 @@
         "stringr",
         "tidyr"
       ],
-      "Hash": "fd6cd08f6528ad4dc8cfceb24d0abb59"
+      "Hash": "c3282020d9d1b6527f9252a5e61eda82"
     },
     "cellranger": {
       "Package": "cellranger",

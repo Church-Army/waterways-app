@@ -86,10 +86,12 @@ if(is.data.frame(data)){
                                  keep =
                                    str_to_lower(
                                      c("Ex HM forces", "Fisher(wo)men", "Homeless", "Leisure hirers/visitors",
-                                          "Leisure owners", "Liveaboards", "Navigation authority staff or volunteers",
-                                          "Towpath users", "Waterside business staff", "Waterside residents")
+                                       "Leisure owners", "Liveaboards", "Navigation authority staff or volunteers",
+                                       "Towpath users", "Waterside business staff", "Waterside residents",
+                                       "Boatyards", "Marina staff")
                                      ),
-                                 other_col = other_people,
+                                 other_suffix = "other_text",
+                                 other_tally_suffix = "other"
                                  ) |>
     rename(people_fisher_men_women = people_fisher_wo_men)
 
@@ -98,8 +100,14 @@ if(is.data.frame(data)){
                                           "suicidal thoughts", "ptsd", "faith and religion", "boat worthiness",
                                           "boat licensing and mooring", "addiction (alcohol and/or drugs)",
                                           "homelessness", "personal relationships", "(un)employment",
-                                          "crime", "death and bereavement", "moving onto land"),
-                                 other_col = other_concerns)
+                                          "crime", "death and bereavement", "moving onto land"
+                                          ),
+                                 other_suffix = "other_text",
+                                 other_tally_suffix = "other")
+
+  data <- rename(data,
+                 other_text_people   =  people_other_text,
+                 other_text_concerns = concerns_other_text)
 
   data <- mutate(data, response_id = str_c("r_", row_number()))
 
@@ -113,7 +121,7 @@ if(is.data.frame(data)){
                         })
   )
 
-  conversation_responses <- c("None", "One", "Two", "Three", "Four", "Five or more")
+  conversation_responses <- c("None", "One", "Two", "Three", "Four")
 
   data <- mutate(
     data,
@@ -156,6 +164,8 @@ if(is.data.frame(data)){
     select(response_id, concern, is_concern) |>
 
     left_join(concerns_categories, by = c("concern")) |>
+
+    mutate(concern_category = replace_na(concern_category, "other")) |>
 
     summarise(is_concern = any(is_concern),
               .by = c(response_id, concern_category)) |>
@@ -503,9 +513,12 @@ server <- function(input, output) {
              str_replace_all("_", " ") |>
              ordered())
 
+  picker_choices <- unique(very_concise_concerns[["concern"]])
+  pikcer_choices <- picker_choices[picker_choices != "Other"]
+
   output$concerns_picker_hbar <- renderUI({
     concerns_picker(prefix = "concerns_hbar",
-                    choices = unique(very_concise_concerns[["concern"]]),
+                    choices = pikcer_choices,
                     width = 2,
                     hubs = unique(as.character(very_concise_concerns[["hub"]])),
                     switchInput("is_concerns_pie",
@@ -573,7 +586,8 @@ server <- function(input, output) {
       plot_out <-
       filter(very_concise_concerns,
              concern %in% input$concerns_hbar_highlight,
-             count > 0) |>
+             count > 0,
+             concern != "Other") |>
         ggplot(aes(x = count, y = reorder(concern, count), fill = concern)) +
 
         geom_col() +
@@ -584,7 +598,11 @@ server <- function(input, output) {
         theme_ca("black") +
         theme(legend.position = "none",
               text = element_text(size = 28),
-              panel.grid.major.y = element_blank())
+              panel.grid.major.y = element_blank(),
+              plot.caption = element_text(size = 14)) +
+        labs(
+          caption = "Freetext (i.e. 'other') responses are excluded from this graph."
+        )
     }
 
     plot_out +
