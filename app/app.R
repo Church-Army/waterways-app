@@ -512,7 +512,7 @@ server <- function(input, output) {
   )
 
 
-  very_concise_concerns <-
+  concerns_plot_data <-
     data |>
     pivot_longer(starts_with("concerns_"),
                  names_to = "concern",
@@ -523,58 +523,70 @@ server <- function(input, output) {
              str_replace_all("_", " ") |>
              ordered())
 
-  picker_choices <- unique(very_concise_concerns[["concern"]])
+  concerns_colours <-
+    summarise(concerns_plot_data, .by = concern) |>
+    mutate(plot_colour = fill_colours[1:n()])
+
+  picker_choices <- unique(concerns_plot_data[["concern"]])
   pikcer_choices <- picker_choices[picker_choices != "Other"]
 
   output$concerns_picker_hbar <- renderUI({
     concerns_picker(prefix = "concerns_hbar",
                     choices = pikcer_choices,
                     width = 2,
-                    hubs = unique(as.character(very_concise_concerns[["hub"]])),
+                    hubs = unique(as.character(concerns_plot_data[["hub"]])),
                     switchInput("is_concerns_pie",
                                 label = "Switch to:",
                                 onLabel = "Bar chart",
                                 offLabel = "Pie chart"))
     })
-  ## Horizontal concerns plot --------------------------------------------------
+  ## Horizontal-bar/pie concerns plot --------------------------------------------------
   output$horizontal_concerns_bar <- renderPlot({
     ## apply sidebar preferences
 
     if(!is.null(input$concerns_hbar_hubs) && !input$concerns_hbar_hubs == "All"){
-      very_concise_concerns <-
-        filter(very_concise_concerns, hub %in% input$concerns_hbar_hubs) |>
-        summarise(count = sum(indicated),
-                  .by = c(month, concern, hub))
+      concerns_plot_data <-
+        filter(concerns_plot_data, hub %in% input$concerns_hbar_hubs) |>
+        group_by(month, concern, hub)
     } else {
-      very_concise_concerns <-
-        summarise(very_concise_concerns,
-                  count = sum(indicated),
-                  .by = c(month, concern))
+      concerns_plot_data <- group_by(concerns_plot_data, month, concern)
     }
+
+    concerns_plot_data <-
+      summarise(concerns_plot_data, count = sum(indicated), .groups = "drop")
 
     if(!is.null(input$concerns_hbar_daterange[1])){
-    very_concise_concerns <-
-      filter(very_concise_concerns,
-             between(month, input$concerns_hbar_daterange[1],
-                     input$concerns_hbar_daterange[2]))
+    concerns_plot_data <-
+      filter(concerns_plot_data,
+             between(month, input$concerns_hbar_daterange[1], input$concerns_hbar_daterange[2]))
     }
 
-    very_concise_concerns <-
-      summarise(very_concise_concerns, count = sum(count), .by = concern)
+    concerns_plot_data <-
+      summarise(concerns_plot_data, count = sum(count), .by = concern)
+
 
     if(is.null(input$is_concerns_pie)){
       plot_out <- ggplot()
     }else if(input$is_concerns_pie){
-      plot_out <-
-        mutate(very_concise_concerns,
+      # browser()
+      plot_data <-
+        mutate(concerns_plot_data,
                concern = fct_other(concern, keep = input$concerns_hbar_highlight)) |>
         summarise(count = sum(count), .by = concern) |>
         mutate(prop = count/sum(count)) |>
-        filter(prop > 0) |>
+        filter(prop > 0)
 
-        ggplot(aes(x = 1, y = count, fill = concern)) +
+      compatible_colours <-
+        filter(concerns_colours, concern %in% plot_data$concern) |>
+        mutate(concern = ordered(concern, levels = levels(plot_data$concern)))
+
+      plot_data <- left_join(plot_data, compatible_colours, by = "concern")
+
+        plot_out <-
+        ggplot(plot_data, aes(x = 1, y = count, fill = plot_colour)) +
 
         geom_col(position = "stack", colour = "black") +
+
         geom_text(aes(label = label_percent(0.1)(prop),
                       x = 1.6),
                   position = position_stack(0.5),
@@ -594,11 +606,13 @@ server <- function(input, output) {
     } else {
 
       plot_out <-
-      filter(very_concise_concerns,
+      filter(concerns_plot_data,
              concern %in% input$concerns_hbar_highlight,
              count > 0,
              concern != "Other") |>
-        ggplot(aes(x = count, y = reorder(concern, count), fill = concern)) +
+        left_join(concerns_colours, by = "concern") |>
+
+        ggplot(aes(x = count, y = reorder(concern, count), fill = plot_colour)) +
 
         geom_col() +
 
@@ -616,7 +630,7 @@ server <- function(input, output) {
     }
 
     plot_out +
-      scale_fill_manual(values = fill_colours)
+      scale_fill_identity()
 
   })
 
