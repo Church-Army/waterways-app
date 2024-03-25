@@ -429,14 +429,23 @@ server <- function(input, output) {
     pivot_longer(starts_with("concern_"),
                  names_prefix = "concern_",
                  names_to = "concern",
-                 values_to = "identified") |>
+                 values_to = "identified")
+
+  plot_colours <-
+    summarise(mainpage_plot_data, .by = concern) |>
+    mutate(plot_colour = hue_pal()(n()))
+
+  mainpage_plot_data <- left_join(mainpage_plot_data, plot_colours, by = "concern")
 
     # NB currently we treat 1 or more occurrences of the same concerns within
     # a month by the same chaplain as equivalent values, since a return could
     # be daily or monthly. It's hard to get Google forms to allow people to tally
     # occurrences ongoingly, so currently this seems like the most responsible way
     # to report
-    summarise(occured = any(identified), .by = c(concern, email_address, month, hub)) |>
+
+  mainpage_plot_data <-
+    summarise(mainpage_plot_data,
+              occured = any(identified), .by = c(concern, email_address, month, hub, plot_colour)) |>
     mutate(concern = prettify(concern))
 
   output$concerns_picker_mainpage <- renderUI({
@@ -455,7 +464,8 @@ server <- function(input, output) {
 
     mainpage_plot_data <-
       filter(mainpage_plot_data, hub %in% mainpage_hub) |>
-      summarise(count = sum(occured), .by = c(concern, month)) |>
+      summarise(count = sum(occured), plot_colour = unique(plot_colour),
+                .by = c(concern, month)) |>
       mutate(concern =
                ordered(concern) |>
                fct_reorder(-count))
@@ -469,10 +479,10 @@ server <- function(input, output) {
 
       geom_line(colour = "gray60", alpha = 0.35) +
 
-      geom_line(data = highlight, aes(x = month, y = count, colour = concern),
+      geom_line(data = highlight, aes(x = month, y = count, colour = plot_colour),
                 linewidth = 2, alpha = 0.85) +
 
-      scale_colour_discrete() +
+      scale_colour_identity() +
 
       scale_x_date(
         breaks = "1 month",
