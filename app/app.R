@@ -567,6 +567,7 @@ server <- function(input, output) {
 
     if(is.null(input$is_concerns_pie)){
       plot_out <- ggplot()
+      fill_labels <- character()
     }else if(input$is_concerns_pie){
       # browser()
       plot_data <-
@@ -581,6 +582,8 @@ server <- function(input, output) {
         mutate(concern = ordered(concern, levels = levels(plot_data$concern)))
 
       plot_data <- left_join(plot_data, compatible_colours, by = "concern")
+
+      fill_labels <- as.character(plot_data$concern)
 
         plot_out <-
         ggplot(plot_data, aes(x = 1, y = count, fill = plot_colour)) +
@@ -605,14 +608,17 @@ server <- function(input, output) {
 
     } else {
 
-      plot_out <-
+      plot_data <-
       filter(concerns_plot_data,
              concern %in% input$concerns_hbar_highlight,
              count > 0,
              concern != "Other") |>
-        left_join(concerns_colours, by = "concern") |>
+        left_join(concerns_colours, by = "concern")
 
-        ggplot(aes(x = count, y = reorder(concern, count), fill = plot_colour)) +
+      fill_labels <- plot_data$concern
+
+      plot_out <-
+        ggplot(plot_data, aes(x = count, y = reorder(concern, count), fill = plot_colour)) +
 
         geom_col() +
 
@@ -629,8 +635,14 @@ server <- function(input, output) {
         )
     }
 
+    fetch_concern_colour <- function(colours){
+      concerns_colours$concern[match(concern_colour$colour, colours)]
+    }
     plot_out +
-      scale_fill_identity()
+      scale_fill_identity(labels = fill_labels,
+                          breaks = waiver(),
+                          guide = guide_legend(),
+                          name = "Concerns")
 
   })
 
