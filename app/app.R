@@ -51,6 +51,12 @@ prettify <- function(x) {
     str_replace_all("_", " ")
 }
 
+
+
+try_fct_other <- function(x, ...){
+  possibly(fct_other, otherwise = x)(x, ...)
+}
+
 fill_colours <-
   c("#89C5DA", "#DA5724", "#74D944", "#CE50CA", "#3F4921", "#C0717C", "#CBD588", "#5F7FC7",
     "#673770", "#D3D93E", "#38333E", "#508578", "#D7C1B1", "#689030", "#AD6F3B", "#CD9BCD",
@@ -240,7 +246,8 @@ ui <- fluidPage(
                  ))))),
 
     tabPanel("Who are we talking to?",
-             plotOutput("people_pie_chart", height = "550px")
+             uiOutput("people_picker_pie"),
+             mainPanel(plotOutput("people_pie_chart", height = "550px"))
              ),
 
 
@@ -528,11 +535,11 @@ server <- function(input, output) {
     mutate(plot_colour = fill_colours[1:n()])
 
   picker_choices <- unique(concerns_plot_data[["concern"]])
-  pikcer_choices <- picker_choices[picker_choices != "Other"]
+  picker_choices <- picker_choices[picker_choices != "Other"]
 
   output$concerns_picker_hbar <- renderUI({
     concerns_picker(prefix = "concerns_hbar",
-                    choices = pikcer_choices,
+                    choices = picker_choices,
                     width = 2,
                     hubs = unique(as.character(concerns_plot_data[["hub"]])),
                     switchInput("is_concerns_pie",
@@ -564,15 +571,14 @@ server <- function(input, output) {
     concerns_plot_data <-
       summarise(concerns_plot_data, count = sum(count), .by = concern)
 
-
     if(is.null(input$is_concerns_pie)){
       plot_out <- ggplot()
       fill_labels <- character()
     }else if(input$is_concerns_pie){
-      # browser()
+
       plot_data <-
         mutate(concerns_plot_data,
-               concern = fct_other(concern, keep = input$concerns_hbar_highlight)) |>
+               concern = try_fct_other(concern, keep = input$concerns_hbar_highlight)) |>
         summarise(count = sum(count), .by = concern) |>
         mutate(prop = count/sum(count)) |>
         filter(prop > 0)
@@ -583,10 +589,11 @@ server <- function(input, output) {
 
       plot_data <- left_join(plot_data, compatible_colours, by = "concern")
 
-      fill_labels <- as.character(plot_data$concern)
+      colours <- plot_data$plot_colour
+      names(colours) <- plot_data$concern
 
         plot_out <-
-        ggplot(plot_data, aes(x = 1, y = count, fill = plot_colour)) +
+        ggplot(plot_data, aes(x = 1, y = count, fill = concern)) +
 
         geom_col(position = "stack", colour = "black") +
 
@@ -604,7 +611,10 @@ server <- function(input, output) {
           text = element_text(size = 20),
           panel.grid = element_blank(),
           axis.text = element_blank()
-        )
+        ) +
+          scale_fill_manual(values = colours,
+                            guide = guide_legend(),
+                            name = "Concerns")
 
     } else {
 
@@ -615,10 +625,13 @@ server <- function(input, output) {
              concern != "Other") |>
         left_join(concerns_colours, by = "concern")
 
-      fill_labels <- plot_data$concern
+
+      colours <- plot_data$plot_colour
+      names(colours) <- plot_data$concern
+
 
       plot_out <-
-        ggplot(plot_data, aes(x = count, y = reorder(concern, count), fill = plot_colour)) +
+        ggplot(plot_data, aes(x = count, y = reorder(concern, count), fill = concern)) +
 
         geom_col() +
 
@@ -632,78 +645,89 @@ server <- function(input, output) {
               plot.caption = element_text(size = 14)) +
         labs(
           caption = "Freetext (i.e. 'other') responses are excluded from this graph."
-        )
-    }
-
-    fetch_concern_colour <- function(colours){
-      concerns_colours$concern[match(concern_colour$colour, colours)]
-    }
-    plot_out +
-      scale_fill_identity(labels = fill_labels,
-                          breaks = waiver(),
+        ) +
+        scale_fill_manual(values = colours,
                           guide = guide_legend(),
                           name = "Concerns")
+    }
+
+    plot_out
 
   })
 
   ## Pie chart people plot -----------------------------------------------------
+
+  output$people_picker_pie <- renderUI({
+    concerns_picker(prefix = "people_pie",
+                    choices = people_choices,
+                    width = 2,
+                    hubs = unique(as.character(concerns_plot_data[["hub"]])))
+  })
 
   very_concise_people <-
     data |>
     pivot_longer(starts_with("people_"),
                  names_to = "people",
                  values_to = "indicated") |>
-    summarise(count = sum(indicated),
-              .by = c(people)) |>
     mutate(people =
              str_remove(people, "people_") |>
              capitalise() |>
              str_replace_all("_", " ") |>
-             ordered()) |>
-    mutate(prop = count/sum(count))
+             ordered())
 
-  people_pie <-
+  people_choices <- unique(very_concise_people$people)
 
-    ggplot(very_concise_people, aes(x = 1, y = count, fill = people)) +
 
-    geom_col(width = 0.7, colour = "black") +
+  output$people_pie_chart <- renderPlot({
 
-    geom_text(
-      aes(label = label_percent(0.1)(prop),
-          x = 1.45),
-      size = 5,
-      position = position_stack(0.5)
-    ) +
+    very_concise_people <- filter(very_concise_people, hub %in% input$people_pie_hubs)
 
-    scale_fill_manual(
-      name = "Who are we talking to?",
-      values = rep(brewer.pal(12, "Set3"), length.out = nrow(very_concise_people))) +
+    very_concise_people <- mutate(very_concise_people, people = fct_other(people, keep = input$people_pie_highlight)) |>
+      summarise(count = sum(indicated),
+                .by = c(people)) |>
+      mutate(prop = count/sum(count))
 
-    scale_x_continuous(breaks = 1, labels = "All People") +
 
-    scale_x_discrete(labels =
-                       \(x){
-                         str_remove(x, "people")  |>
-                           str_replace("wo_men", "women") |>
-                           to_title_case()
+      ggplot(very_concise_people, aes(x = 1, y = count, fill = people)) +
+
+      geom_col(width = 0.7, colour = "black") +
+
+      geom_text(
+        aes(label = label_percent(0.1)(prop),
+            x = 1.45),
+        size = 5,
+        position = position_stack(0.5)
+      ) +
+
+      scale_fill_manual(
+        name = "Who are we talking to?",
+        values = rep(brewer.pal(12, "Set3"), length.out = nrow(very_concise_people))) +
+
+      scale_x_continuous(breaks = 1, labels = "All People") +
+
+      scale_x_discrete(labels =
+                         \(x){
+                           str_remove(x, "people")  |>
+                             str_replace("wo_men", "women") |>
+                             to_title_case()
                          }) +
 
-    coord_polar("y") +
+      coord_polar("y") +
 
-    labs(
-      x = NULL,
-      y = NULL,
-    ) +
+      labs(
+        x = NULL,
+        y = NULL,
+      ) +
 
-    theme_ca("black") +
+      theme_ca("black") +
 
-    theme(axis.line = element_blank(),
-          panel.grid.major = element_blank(),
-          panel.grid.minor = element_blank(),
-          panel.border = element_blank(),
-          axis.text = element_blank())
-
-  output$people_pie_chart <- renderPlot({people_pie})
+      theme(axis.line = element_blank(),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.border = element_blank(),
+            axis.text = element_blank(),
+            text = element_text(size = 28))
+  })
 
 
 }
