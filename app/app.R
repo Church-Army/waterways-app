@@ -51,8 +51,6 @@ prettify <- function(x) {
     str_replace_all("_", " ")
 }
 
-
-
 try_fct_other <- function(x, ...){
   possibly(fct_other, otherwise = x)(x, ...)
 }
@@ -480,16 +478,18 @@ server <- function(input, output) {
     highlight <- filter(mainpage_plot_data, concern %in% input$concerns_mainpage_highlight)
     lowlight  <- filter(mainpage_plot_data, !concern %in% input$concerns_mainpage_highlight)
 
+    colours <- mainpage_plot_data$plot_colour
+    names(colours) <- mainpage_plot_data$concern
 
 
     ggplot(lowlight, aes(x = month, y = count, group = concern)) +
 
       geom_line(colour = "gray60", alpha = 0.35) +
 
-      geom_line(data = highlight, aes(x = month, y = count, colour = plot_colour),
+      geom_line(data = highlight, aes(x = month, y = count, colour = concern),
                 linewidth = 2, alpha = 0.85) +
 
-      scale_colour_identity() +
+      scale_colour_manual(values = colours) +
 
       scale_x_date(
         breaks = "1 month",
