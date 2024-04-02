@@ -61,6 +61,16 @@ fill_colours <-
     "#D14285", "#6DDE88", "#652926", "#7FDCC0", "#C84248", "#8569D5", "#5E738F", "#D1A33D",
     "#8A7C64", "#599861")
 
+
+## Plotting helpers ------------------------------------------------------------
+
+plot_colours <- function(x, .f = NULL){
+  if(is.null(.f)) colours <- fill_colours[seq_along(unique(x))]
+  else colours <- .f(x)
+  names(colours) <- sort(unique(x))
+  colours
+}
+
 # attempt to read sheet --------------------------------------------------------
 secret_sheet <- "14qI8A51Op2Ri3yfwD1t2AQZ1fxki-KUFb7_EEyvO4Lo"
 data <- tryCatch(read_sheet(secret_sheet), error = identity)
@@ -436,12 +446,6 @@ server <- function(input, output) {
                  names_to = "concern",
                  values_to = "identified")
 
-  plot_colours <-
-    summarise(mainpage_plot_data, .by = concern) |>
-    mutate(plot_colour = hue_pal()(n()))
-
-  mainpage_plot_data <- left_join(mainpage_plot_data, plot_colours, by = "concern")
-
     # NB currently we treat 1 or more occurrences of the same concerns within
     # a month by the same chaplain as equivalent values, since a return could
     # be daily or monthly. It's hard to get Google forms to allow people to tally
@@ -450,7 +454,8 @@ server <- function(input, output) {
 
   mainpage_plot_data <-
     summarise(mainpage_plot_data,
-              occured = any(identified), .by = c(concern, email_address, month, hub, plot_colour)) |>
+              occured = any(identified),
+              .by = c(concern, email_address, month, hub)) |>
     mutate(concern = prettify(concern))
 
   output$concerns_picker_mainpage <- renderUI({
@@ -469,8 +474,7 @@ server <- function(input, output) {
 
     mainpage_plot_data <-
       filter(mainpage_plot_data, hub %in% mainpage_hub) |>
-      summarise(count = sum(occured), plot_colour = unique(plot_colour),
-                .by = c(concern, month)) |>
+      summarise(count = sum(occured), .by = c(concern, month)) |>
       mutate(concern =
                ordered(concern) |>
                fct_reorder(-count))
@@ -478,9 +482,7 @@ server <- function(input, output) {
     highlight <- filter(mainpage_plot_data, concern %in% input$concerns_mainpage_highlight)
     lowlight  <- filter(mainpage_plot_data, !concern %in% input$concerns_mainpage_highlight)
 
-    colours <- mainpage_plot_data$plot_colour
-    names(colours) <- mainpage_plot_data$concern
-
+    mainpage_plot_colours <- plot_colours(mainpage_plot_data$concern, .f = \(x) hue_pal()(n_distinct(x)))
 
     ggplot(lowlight, aes(x = month, y = count, group = concern)) +
 
@@ -489,7 +491,7 @@ server <- function(input, output) {
       geom_line(data = highlight, aes(x = month, y = count, colour = concern),
                 linewidth = 2, alpha = 0.85) +
 
-      scale_colour_manual(values = colours) +
+      scale_colour_manual(values = mainpage_plot_colours) +
 
       scale_x_date(
         breaks = "1 month",
@@ -530,9 +532,7 @@ server <- function(input, output) {
              str_replace_all("_", " ") |>
              ordered())
 
-  concerns_colours <-
-    summarise(concerns_plot_data, .by = concern) |>
-    mutate(plot_colour = fill_colours[1:n()])
+  concerns_colours <- plot_colours(concerns_plot_data$concern)
 
   picker_choices <- unique(concerns_plot_data[["concern"]])
   picker_choices <- picker_choices[picker_choices != "Other"]
@@ -583,15 +583,6 @@ server <- function(input, output) {
         mutate(prop = count/sum(count)) |>
         filter(prop > 0)
 
-      compatible_colours <-
-        filter(concerns_colours, concern %in% plot_data$concern) |>
-        mutate(concern = ordered(concern, levels = levels(plot_data$concern)))
-
-      plot_data <- left_join(plot_data, compatible_colours, by = "concern")
-
-      colours <- plot_data$plot_colour
-      names(colours) <- plot_data$concern
-
         plot_out <-
         ggplot(plot_data, aes(x = 1, y = count, fill = concern)) +
 
@@ -606,15 +597,12 @@ server <- function(input, output) {
 
         xlab(NULL) +
         ylab(NULL) +
-        theme_minimal() +
+        theme_ca("black") +
         theme(
           text = element_text(size = 20),
           panel.grid = element_blank(),
           axis.text = element_blank()
-        ) +
-          scale_fill_manual(values = colours,
-                            guide = guide_legend(),
-                            name = "Concerns")
+        )
 
     } else {
 
@@ -622,13 +610,7 @@ server <- function(input, output) {
       filter(concerns_plot_data,
              concern %in% input$concerns_hbar_highlight,
              count > 0,
-             concern != "Other") |>
-        left_join(concerns_colours, by = "concern")
-
-
-      colours <- plot_data$plot_colour
-      names(colours) <- plot_data$concern
-
+             concern != "Other")
 
       plot_out <-
         ggplot(plot_data, aes(x = count, y = reorder(concern, count), fill = concern)) +
@@ -637,22 +619,20 @@ server <- function(input, output) {
 
         labs(x = "Count",
              y = "Conversation topics",
-             title = "What are we talking about?") +
+             caption = "Freetext (i.e. 'other') responses are excluded from this graph.") +
         theme_ca("black") +
         theme(legend.position = "none",
               text = element_text(size = 28),
               panel.grid.major.y = element_blank(),
-              plot.caption = element_text(size = 14)) +
-        labs(
-          caption = "Freetext (i.e. 'other') responses are excluded from this graph."
-        ) +
-        scale_fill_manual(values = colours,
-                          guide = guide_legend(),
-                          name = "Concerns")
+              plot.caption = element_text(size = 14))
+
     }
 
-    plot_out
-
+    plot_out  +
+      scale_fill_manual(values = concerns_colours,
+                        guide = guide_legend(),
+                        name = "Concerns") +
+      ggtitle("What are we talking about?")
   })
 
   ## Pie chart people plot -----------------------------------------------------
@@ -664,7 +644,7 @@ server <- function(input, output) {
                     hubs = unique(as.character(concerns_plot_data[["hub"]])))
   })
 
-  very_concise_people <-
+  people_plot_data <-
     data |>
     pivot_longer(starts_with("people_"),
                  names_to = "people",
@@ -675,35 +655,34 @@ server <- function(input, output) {
              str_replace_all("_", " ") |>
              ordered())
 
-  people_choices <- unique(very_concise_people$people)
+  people_choices <- unique(people_plot_data$people)
 
 
   output$people_pie_chart <- renderPlot({
 
-    plot_colours <- fill_colours[1:n_distinct(very_concise_people$people)]
-    names(plot_colours) <- sort(unique(very_concise_people$people))
+    people_plot_colours <- plot_colours(people_plot_data$people)
 
     hub_choice <- input$people_pie_hubs
 
-    if(length(hub_choice) > 0 && hub_choice != "All") very_concise_people <- filter(very_concise_people, hub %in% hub_choice)
+    if(length(hub_choice) > 0 && hub_choice != "All") people_plot_data <- filter(people_plot_data, hub %in% hub_choice)
 
     if(length(input$people_pie_highlight) > 0){
-      very_concise_people <-
-        mutate(very_concise_people,
+      people_plot_data <-
+        mutate(people_plot_data,
                people = fct_other(people, keep = input$people_pie_highlight))
     }
 
-    very_concise_people <-
+    people_plot_data <-
       summarise(
-        very_concise_people,
+        people_plot_data,
         count = sum(indicated),
         .by = c(people)) |>
       mutate(prop = count/sum(count))
 
 
-    if(nrow(very_concise_people) > 0){
+    if(nrow(people_plot_data) > 0){
 
-      ggplot(very_concise_people, aes(x = 1, y = count, fill = people)) +
+      ggplot(people_plot_data, aes(x = 1, y = count, fill = people)) +
 
       geom_col(width = 0.7, colour = "black") +
 
@@ -716,7 +695,7 @@ server <- function(input, output) {
 
       scale_fill_manual(
         name = "Who are we talking to?",
-        values = plot_colours) +
+        values = people_plot_colours) +
 
       scale_x_continuous(breaks = 1, labels = "All People") +
 
