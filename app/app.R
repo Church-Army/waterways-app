@@ -666,11 +666,11 @@ server <- function(input, output) {
 
     if(length(hub_choice) > 0 && hub_choice != "All") people_plot_data <- filter(people_plot_data, hub %in% hub_choice)
 
-    if(length(input$people_pie_highlight) > 0){
       people_plot_data <-
         mutate(people_plot_data,
-               people = fct_other(people, keep = input$people_pie_highlight))
-    }
+               people =
+                 try_fct_other(people, keep = input$people_pie_highlight) |>
+                 fct_relevel("Other", after = Inf))
 
     people_plot_data <-
       summarise(
@@ -694,7 +694,7 @@ server <- function(input, output) {
       ) +
 
       scale_fill_manual(
-        name = "Who are we talking to?",
+        name = "People:",
         values = people_plot_colours) +
 
       scale_x_continuous(breaks = 1, labels = "All People") +
@@ -720,7 +720,8 @@ server <- function(input, output) {
             panel.grid.minor = element_blank(),
             panel.border = element_blank(),
             axis.text = element_blank(),
-            text = element_text(size = 28))
+            text = element_text(size = 28)) +
+        ggtitle("Who are we talking to?")
     }
     else(ggplot)
   })
