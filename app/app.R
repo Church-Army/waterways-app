@@ -680,13 +680,28 @@ server <- function(input, output) {
 
   output$people_pie_chart <- renderPlot({
 
-    very_concise_people <- filter(very_concise_people, hub %in% input$people_pie_hubs)
+    plot_colours <- fill_colours[1:n_distinct(very_concise_people$people)]
+    names(plot_colours) <- sort(unique(very_concise_people$people))
 
-    very_concise_people <- mutate(very_concise_people, people = fct_other(people, keep = input$people_pie_highlight)) |>
-      summarise(count = sum(indicated),
-                .by = c(people)) |>
+    hub_choice <- input$people_pie_hubs
+
+    if(length(hub_choice) > 0 && hub_choice != "All") very_concise_people <- filter(very_concise_people, hub %in% hub_choice)
+
+    if(length(input$people_pie_highlight) > 0){
+      very_concise_people <-
+        mutate(very_concise_people,
+               people = fct_other(people, keep = input$people_pie_highlight))
+    }
+
+    very_concise_people <-
+      summarise(
+        very_concise_people,
+        count = sum(indicated),
+        .by = c(people)) |>
       mutate(prop = count/sum(count))
 
+
+    if(nrow(very_concise_people) > 0){
 
       ggplot(very_concise_people, aes(x = 1, y = count, fill = people)) +
 
@@ -701,7 +716,7 @@ server <- function(input, output) {
 
       scale_fill_manual(
         name = "Who are we talking to?",
-        values = rep(brewer.pal(12, "Set3"), length.out = nrow(very_concise_people))) +
+        values = plot_colours) +
 
       scale_x_continuous(breaks = 1, labels = "All People") +
 
@@ -727,6 +742,8 @@ server <- function(input, output) {
             panel.border = element_blank(),
             axis.text = element_blank(),
             text = element_text(size = 28))
+    }
+    else(ggplot)
   })
 
 
