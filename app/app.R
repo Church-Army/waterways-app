@@ -730,13 +730,6 @@ server <- function(input, output) {
 
       scale_x_continuous(breaks = 1, labels = "All People") +
 
-      scale_x_discrete(labels =
-                         \(x){
-                           str_remove(x, "people")  |>
-                             str_replace("wo_men", "women") |>
-                             to_title_case()
-                         }) +
-
       coord_polar("y") +
 
       labs(
