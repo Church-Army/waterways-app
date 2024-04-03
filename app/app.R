@@ -342,6 +342,7 @@ server <- function(input, output) {
         downloadButton("xlsx_download", "Download data"),
         h2("Generate monthly reports"),
         fluidRow(
+          selectInput("report_hub", "Hub", choices = c("All", sort(unique(as.character(data$hub))))),
           checkboxGroupInput("report_months", "Month(s)",
                              choices = month.name,
                              selected = month.name[month(today())],
@@ -380,12 +381,14 @@ server <- function(input, output) {
     report_data <-
       data |>
       filter(month(month) %in% months, year(month) == year) |>
+      filter_hub(isolate(input$report_hubs)) |>
       group_by(month)
 
 
     if(isolate(input$report_type) == "Comprehensive reports"){
 
-      drive_dir <- "Monthly summary reports"
+      drive_dir <- if_else(isolate(input$report_hub == "All"), "Monthly summary reports", "Hub reports")
+      hub_dir <- ifelse(isolate(input$report_hub) == "All", "", isolate(input$report_hub))
       file_prefix <- "monthly-summary"
 
       conversations <-
@@ -437,18 +440,20 @@ server <- function(input, output) {
 
     tmp <- dir_create("tmp")
 
-    iwalk(report_data,
+    drive_paths <-
+      imap_chr(report_data,
           \(data, month){
 
-            file_name <- str_c(file_prefix, month, sep = "_")
+            file_name <- str_c(file_prefix, month, isolate(input$report_hub), sep = "_")
 
             report_sheet <- gs4_create(file_name, sheets = data)
 
             drive_path <- path("waterways chaplains reporting",
-                               drive_dir, file_name)
+                               drive_dir, hub_dir, file_name)
 
             drive_mv(report_sheet, path = drive_path, overwrite = TRUE)
 
+            drive_path
           })
 
     removeModal()
@@ -456,7 +461,7 @@ server <- function(input, output) {
     output$report_gen_message <- renderPrint({
       reports <- length(report_data)
       cat("Generated", reports, "report(s) with the following name(s):\n")
-      cat(str_c(file_prefix, names(report_data), sep = "_"), sep = "\n")
+      cat(drive_paths, sep = "\n")
       cat("\nThese reports can be found in the Google Drive folder 'waterways chaplains reporting/",
           drive_dir, "'.",
           sep = "")
