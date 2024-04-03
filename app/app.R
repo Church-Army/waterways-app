@@ -434,7 +434,7 @@ server <- function(input, output) {
     iwalk(report_data,
           \(data, month){
 
-            file_name <- str_c(file_prefix, month, sep = "_")
+            file_name <- str_c(file_prefix, str_extract(month, "\\d{4}-\\d{2}"), sep = "_")
 
             report_sheet <- gs4_create(file_name, sheets = data)
 
