@@ -69,7 +69,11 @@ fill_colours <-
 
 specified <- function(x, default = "") length(x) > 0 && x != default
 
-get_month <- function(x) make_date(year = year(x), month = month(x))
+get_month <- function(x, toString = FALSE){
+  out <- make_date(year = year(x), month = month(x))
+  if(toString) out <- str_extract(out, "\\d{4}-\\d{2}")
+  out
+}
 
 ## Plotting helpers ------------------------------------------------------------
 
@@ -413,7 +417,7 @@ server <- function(input, output) {
     ## generate reports
     if(input$separate_reports){
     report_data <- group_by(report_data, month)
-    report_months <- group_keys(report_data)[["month"]]
+    report_months <- get_month(group_keys(report_data)[["month"]], toString = TRUE)
 
     report_data <-
       group_split(report_data) |>
@@ -421,7 +425,9 @@ server <- function(input, output) {
     } else {
       month_range_label <-
         str_c(
-          min(report_data[["month"]]), "to", max(report_data[["month"]]),
+          get_month(min(report_data[["month"]]), toString = TRUE),
+          "to",
+          get_month(max(report_data[["month"]]), toString = TRUE),
           sep = "-"
           )
 
@@ -434,7 +440,7 @@ server <- function(input, output) {
     iwalk(report_data,
           \(data, month){
 
-            file_name <- str_c(file_prefix, str_extract(month, "\\d{4}-\\d{2}"), sep = "_")
+            file_name <- str_c(file_prefix, month, sep = "_")
 
             report_sheet <- gs4_create(file_name, sheets = data)
 
