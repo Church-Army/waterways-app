@@ -46,6 +46,10 @@ year_ago <- function(from = today()){
   from - days(365)
 }
 
+month_ago <- function(from = today()){
+  from - months(1)
+}
+
 prettify <- function(x) {
   capitalise(x) |>
     str_replace_all("_", " ")
@@ -61,14 +65,42 @@ fill_colours <-
     "#D14285", "#6DDE88", "#652926", "#7FDCC0", "#C84248", "#8569D5", "#5E738F", "#D1A33D",
     "#8A7C64", "#599861")
 
+## Predicates ------------------------------------------------------------------
+
+specified <- function(x, default = "") length(x) > 0 && x != default
+
+get_month <- function(x) make_date(year = year(x), month = month(x))
 
 ## Plotting helpers ------------------------------------------------------------
 
+## Get colours for manual scale
 plot_colours <- function(x, .f = NULL){
   if(is.null(.f)) colours <- fill_colours[seq_along(unique(x))]
   else colours <- .f(x)
   names(colours) <- sort(unique(x))
   colours
+}
+
+## Filter data using date-range input
+filter_date <- function(x, date_input){
+  if(!any(is.null(date_input))){
+
+    month_range <- get_month(date_input)
+    x <- filter(x, between(month, month_range[1], month_range[2]))
+  } else x
+}
+
+
+filter_hub <- function(x, hub_choice){
+
+  if(specified(hub_choice, "All")) filter(x, hub %in% hub_choice)
+  else x
+}
+
+date_caption <- function(dates){
+
+  dates <- str_extract(dates, "\\d{4}-\\d{2}")
+  str_c("Between", dates[1], "and", dates[2], sep = " ")
 }
 
 # attempt to read sheet --------------------------------------------------------
@@ -153,17 +185,13 @@ if(is.data.frame(data)){
     )
 
   ## Add month-level date-time marker
-
   data <-
     mutate(data,
-           month =
-             str_c(year(timestamp), match(month, month.name), "01",
-                   sep = "-") |>
-             ymd(),
+           month = make_date(year(timestamp), match(month, month.name)),
            # if this month hadn't started at the time of data collection,
            # assume we're talking about the nearest preceding month
            # (A 'December' collection in Jan will be for December last year.)
-           month = if_else(month > timestamp, month - period("year"), month)
+           month = if_else(month > timestamp, year_ago(month), month)
            )
 
   ## Adding concern group codes to data ----------------------------------------
@@ -200,13 +228,14 @@ concerns_picker <- function(...,
                             prefix,
                             choices = NULL,
                             randomly_select = length(choices),
-                            hubs = NULL){
+                            hubs = NULL,
+                            date_start = year_ago()){
   sidebarPanel(
     ...,
     dateRangeInput(
       str_c(prefix, "_daterange"),
-      label = "Show concerns raised between:",
-      start = year_ago(),
+      label = "Show concerns raised between (to nearest month):",
+      start = date_start,
       end = today(),
       min = "2022-01-01",
       max = today()),
@@ -530,7 +559,9 @@ server <- function(input, output) {
              str_remove(concern, "concerns_") |>
              capitalise() |>
              str_replace_all("_", " ") |>
-             ordered())
+             ordered()) |>
+    # indicated by a given chaplain in a given month
+    summarise(indicated = any(indicated), .by = c(email_address, concern, hub, month))
 
   concerns_colours <- plot_colours(concerns_plot_data$concern)
 
@@ -542,6 +573,7 @@ server <- function(input, output) {
                     choices = picker_choices,
                     width = 2,
                     hubs = unique(as.character(concerns_plot_data[["hub"]])),
+                    date_start = month_ago(),
                     switchInput("is_concerns_pie",
                                 label = "Switch to:",
                                 onLabel = "Bar chart",
@@ -549,41 +581,29 @@ server <- function(input, output) {
     })
   ## Horizontal-bar/pie concerns plot --------------------------------------------------
   output$horizontal_concerns_bar <- renderPlot({
-    ## apply sidebar preferences
-
-    if(!is.null(input$concerns_hbar_hubs) && !input$concerns_hbar_hubs == "All"){
-      concerns_plot_data <-
-        filter(concerns_plot_data, hub %in% input$concerns_hbar_hubs) |>
-        group_by(month, concern, hub)
-    } else {
-      concerns_plot_data <- group_by(concerns_plot_data, month, concern)
-    }
 
     concerns_plot_data <-
-      summarise(concerns_plot_data, count = sum(indicated), .groups = "drop")
+      filter_hub(concerns_plot_data, input$concerns_hbar_hubs) |>
+      filter_date(input$concerns_hbar_daterange) |>
+      summarise(count = sum(indicated), .by = concern)
 
-    if(!is.null(input$concerns_hbar_daterange[1])){
-    concerns_plot_data <-
-      filter(concerns_plot_data,
-             between(month, input$concerns_hbar_daterange[1], input$concerns_hbar_daterange[2]))
-    }
-
-    concerns_plot_data <-
-      summarise(concerns_plot_data, count = sum(count), .by = concern)
 
     if(is.null(input$is_concerns_pie)){
+
       plot_out <- ggplot()
-      fill_labels <- character()
+      concerns_colours <- character()
+
     }else if(input$is_concerns_pie){
 
       plot_data <-
         mutate(concerns_plot_data,
                concern = try_fct_other(concern, keep = input$concerns_hbar_highlight)) |>
+
         summarise(count = sum(count), .by = concern) |>
         mutate(prop = count/sum(count)) |>
         filter(prop > 0)
 
-        plot_out <-
+      plot_out <-
         ggplot(plot_data, aes(x = 1, y = count, fill = concern)) +
 
         geom_col(position = "stack", colour = "black") +
@@ -595,8 +615,9 @@ server <- function(input, output) {
 
         coord_polar("y") +
 
-        xlab(NULL) +
-        ylab(NULL) +
+        labs(x = NULL, y = NULL,
+             caption = "Encounters are capped at one per chaplain per month to account for differences in reporting."
+             ) +
         theme_ca("black") +
         theme(
           text = element_text(size = 20),
@@ -617,14 +638,15 @@ server <- function(input, output) {
 
         geom_col() +
 
-        labs(x = "Count",
+        labs(x = "Encounters with this issue",
              y = "Conversation topics",
-             caption = "Freetext (i.e. 'other') responses are excluded from this graph.") +
+             caption = "Freetext (i.e. 'other') responses are excluded from this graph.\nEncounters are capped at one per chaplain per month to account for differences in reporting.") +
         theme_ca("black") +
         theme(legend.position = "none",
               text = element_text(size = 28),
               panel.grid.major.y = element_blank(),
-              plot.caption = element_text(size = 14))
+              plot.caption = element_text(size = 14),
+              plot.subtitle = element_text(size = 20))
 
     }
 
@@ -632,7 +654,7 @@ server <- function(input, output) {
       scale_fill_manual(values = concerns_colours,
                         guide = guide_legend(),
                         name = "Concerns") +
-      ggtitle("What are we talking about?")
+      ggtitle("What are we talking about?", sub = date_caption(input$concerns_hbar_daterange))
   })
 
   ## Pie chart people plot -----------------------------------------------------
@@ -641,6 +663,7 @@ server <- function(input, output) {
     concerns_picker(prefix = "people_pie",
                     choices = people_choices,
                     width = 2,
+                    date_start = month_ago(),
                     hubs = unique(as.character(concerns_plot_data[["hub"]])))
   })
 
@@ -664,7 +687,7 @@ server <- function(input, output) {
 
     hub_choice <- input$people_pie_hubs
 
-    if(length(hub_choice) > 0 && hub_choice != "All") people_plot_data <- filter(people_plot_data, hub %in% hub_choice)
+    if(specified(hub_choice, "All")) people_plot_data <- filter(people_plot_data, hub %in% hub_choice)
 
       people_plot_data <-
         mutate(people_plot_data,
@@ -710,7 +733,7 @@ server <- function(input, output) {
 
       labs(
         x = NULL,
-        y = NULL,
+        y = NULL
       ) +
 
       theme_ca("black") +
