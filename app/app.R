@@ -659,13 +659,6 @@ server <- function(input, output) {
 
   ## Pie chart people plot -----------------------------------------------------
 
-  output$people_picker_pie <- renderUI({
-    concerns_picker(prefix = "people_pie",
-                    choices = people_choices,
-                    width = 2,
-                    date_start = month_ago(),
-                    hubs = unique(as.character(concerns_plot_data[["hub"]])))
-  })
 
   people_plot_data <-
     data |>
@@ -676,18 +669,36 @@ server <- function(input, output) {
              str_remove(people, "people_") |>
              capitalise() |>
              str_replace_all("_", " ") |>
-             ordered())
+             ordered()) |>
+    # indicated by a given chaplain in a given month
+    summarise(indicated = any(indicated), .by = c(email_address, people, hub, month))
+
+  people_plot_data <-
+    mutate(people_plot_data,
+           people = fct_recode(people,
+                               `Navigation authority` = "Navigation authority staff or volunteers",
+                               `Homeless people` = "Homeless",
+                               `Leisure hirers/visitors` = "Leisure hirers visitors",
+                               `Fishermen/women` = "Fisher men women"))
 
   people_choices <- unique(people_plot_data$people)
 
+
+  output$people_picker_pie <- renderUI({
+    concerns_picker(prefix = "people_pie",
+                    choices = people_choices,
+                    width = 2,
+                    date_start = month_ago(),
+                    hubs = unique(as.character(people_plot_data[["hub"]])))
+  })
 
   output$people_pie_chart <- renderPlot({
 
     people_plot_colours <- plot_colours(people_plot_data$people)
 
-    hub_choice <- input$people_pie_hubs
-
-    if(specified(hub_choice, "All")) people_plot_data <- filter(people_plot_data, hub %in% hub_choice)
+    people_plot_data <-
+      filter_hub(people_plot_data, input$people_pie_hubs) |>
+      filter_date(input$people_pie_daterange)
 
       people_plot_data <-
         mutate(people_plot_data,
@@ -696,12 +707,9 @@ server <- function(input, output) {
                  fct_relevel("Other", after = Inf))
 
     people_plot_data <-
-      summarise(
-        people_plot_data,
-        count = sum(indicated),
-        .by = c(people)) |>
-      mutate(prop = count/sum(count))
-
+      summarise(people_plot_data, count = sum(indicated), .by = c(people)) |>
+      mutate(prop = count/sum(count)) |>
+      filter(prop > 0)
 
     if(nrow(people_plot_data) > 0){
 
@@ -733,7 +741,8 @@ server <- function(input, output) {
 
       labs(
         x = NULL,
-        y = NULL
+        y = NULL,
+        caption = "Encounters are capped at one per chaplain per month to account for differences in reporting."
       ) +
 
       theme_ca("black") +
@@ -743,8 +752,10 @@ server <- function(input, output) {
             panel.grid.minor = element_blank(),
             panel.border = element_blank(),
             axis.text = element_blank(),
-            text = element_text(size = 28)) +
-        ggtitle("Who are we talking to?")
+            text = element_text(size = 28),
+            plot.caption = element_text(size = 14),
+            plot.subtitle = element_text(size = 20)) +
+        ggtitle("Who are we talking to?", subtitle = date_caption(input$people_pie_daterange))
     }
     else(ggplot)
   })
