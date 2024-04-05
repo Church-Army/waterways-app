@@ -359,7 +359,26 @@ server <- function(input, output) {
                         value = TRUE)
         ),
         actionButton("generate_reports", "Generate monthly reports"),
-        verbatimTextOutput("report_gen_message")
+        verbatimTextOutput("report_gen_message"),
+        h2("Reporting engagement"),
+        renderPlot({
+          reporting <-
+            data |>
+            summarise(reports = n(), chaplains = n_distinct(email_address), .by = c(month)) |>
+            pivot_longer(c(reports, chaplains), names_to = "stat", values_to = "count")
+
+          ggplot(reporting, aes(x = month, y = count, colour = stat)) +
+            geom_line() +
+            scale_x_date(limits = c(year_ago(), today()),
+                         breaks = "1 month",
+                         name = "Month") +
+            scale_y_continuous(name = "Count") +
+            scale_colour_discrete(name = "Statistics", labels = capitalise) +
+            theme_ca("black") +
+            theme(
+              text = element_text(size = 16)
+            )
+        })
       )
     } else {
       renderText("Please enter a valid password to access this area of the site")
