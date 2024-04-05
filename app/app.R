@@ -495,7 +495,7 @@ server <- function(input, output) {
   })
 
   output$total_general <- renderText({
-    as.character(sum(data[["n_general"]], na.rm = TRUE))
+    as.character(sum(data[["n_general"]], na.rm = TRUE) + sum(data[["n_meaningful"]], na.rm = TRUE))
   })
 
   mainpage_plot_data <-
