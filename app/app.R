@@ -18,6 +18,7 @@ library(forcats)
 library(digest)
 library(shinyWidgets)
 library(purrr)
+library(cli)
 
 
 #### THIS CODE ALWAYS RUNS #####################################################
@@ -359,7 +360,7 @@ server <- function(input, output) {
                         value = TRUE)
         ),
         actionButton("generate_reports", "Generate monthly reports"),
-        verbatimTextOutput("report_gen_message"),
+        htmlOutput("report_gen_message"),
         h2("Reporting engagement"),
         renderPlot({
           reporting <-
@@ -461,7 +462,7 @@ server <- function(input, output) {
     tmp <- dir_create("tmp")
 
     drive_paths <-
-      imap_chr(report_data,
+      imap(report_data,
           \(data, month){
 
             file_name <- str_c(file_prefix, month, isolate(input$report_hub), sep = "_")
@@ -473,19 +474,30 @@ server <- function(input, output) {
 
             drive_mv(report_sheet, path = drive_path, overwrite = TRUE)
 
-            drive_path
+            id <- drive_get(drive_path)$id
+            link <- str_c("https://docs.google.com/spreadsheets/d/", id)
+
+            a(drive_path, href = link)
+
           })
 
     removeModal()
 
-    output$report_gen_message <- renderPrint({
+    html_list <- function(list_items){
+      ul <- tags$ul()
+
+      ul$children <- map(list_items, \(x) tags$li(x))
+      ul
+    }
+
+    output$report_gen_message <- renderUI({
       reports <- length(report_data)
-      cat("Generated", reports, "report(s) with the following name(s):\n")
-      cat(drive_paths, sep = "\n")
-      cat("\nThese reports can be found in the Google Drive folder 'waterways chaplains reporting/",
-          drive_dir, "'.",
-          sep = "")
-    })
+      div(
+        br(),
+        p("Generated", strong(reports), strong("report(s)"),  "in the following location(s):\n"),
+        html_list(drive_paths)
+      )
+      })
 
     dir_delete("tmp")
   })
