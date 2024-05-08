@@ -403,6 +403,7 @@ server <- function(input, output) {
       filter_hub(isolate(input$report_hubs)) |>
       group_by(month)
 
+    hub_dir <- "" # prevent crashing later if hub_dir undefined
 
     if(isolate(input$report_type) == "Comprehensive reports"){
 
