@@ -475,7 +475,7 @@ server <- function(input, output) {
             id <- drive_get(drive_path)$id
             link <- str_c("https://docs.google.com/spreadsheets/d/", id)
 
-            a(drive_path, href = link)
+            a(drive_path, href = link, target = "_blank", rel = "noopener noreferrer")
 
           })
 
