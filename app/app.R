@@ -71,7 +71,7 @@ fill_colours <-
 specified <- function(x, default = "") length(x) > 0 && x != default
 
 get_month <- function(x, toString = FALSE){
-  out <- make_date(year = year(x), month = month(x))
+  out <- round_date(x, "month")
   if(toString) out <- str_extract(out, "\\d{4}-\\d{2}")
   out
 }
@@ -401,15 +401,12 @@ server <- function(input, output) {
     report_data <-
       data |>
       filter(month(month) %in% months, year(month) == year) |>
-      filter_hub(isolate(input$report_hubs)) |>
+      filter_hub(isolate(input$report_hub)) |>
       group_by(month)
 
-    hub_dir <- "" # prevent crashing later if hub_dir undefined
-
     if(isolate(input$report_type) == "Comprehensive reports"){
-
-      drive_dir <- if_else(isolate(input$report_hub == "All"), "Monthly summary reports", "Hub reports")
       hub_dir <- ifelse(isolate(input$report_hub) == "All", "", isolate(input$report_hub))
+      drive_dir <- if_else(isolate(input$report_hub == "All"), "Monthly summary reports", "Hub reports")
       file_prefix <- "monthly-summary"
 
       conversations <-
@@ -427,7 +424,8 @@ server <- function(input, output) {
 
     } else if(isolate(input$report_type) == "'Other comments' reports"){
 
-      drive_dir <- "'Other comments' reports"
+      hub_dir <- ifelse(isolate(input$report_hub) == "All", "", isolate(input$report_hub))
+      drive_dir <- ifelse(isolate(input$report_hub) == "All", "'Other comments' reports", "Hub reports")
       file_prefix <- "comments"
 
       report_data <-
