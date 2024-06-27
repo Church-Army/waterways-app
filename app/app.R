@@ -287,14 +287,14 @@ ui <- fluidPage(
                  width = 10
                  ))))),
 
-    tabPanel("Who are we talking to?",
+    tabPanel("Who are we we talking to?",
              uiOutput("people_picker_pie"),
              mainPanel(plotOutput("people_pie_chart", height = "550px"))
              ),
 
 
     ## WHAT ARE WE TALKING ABOUT? ==============================================
-    tabPanel("What are we talking about?",
+    tabPanel("What are people talking to us about?",
                uiOutput("concerns_picker_hbar"),
                mainPanel(plotOutput("horizontal_concerns_bar", height = "600px"))
              ),
@@ -695,7 +695,7 @@ server <- function(input, output) {
       scale_fill_manual(values = concerns_colours,
                         guide = guide_legend(),
                         name = "Concerns") +
-      ggtitle("What are we talking about?", sub = date_caption(input$concerns_hbar_daterange))
+      ggtitle("What are people talking to us about?", sub = date_caption(input$concerns_hbar_daterange))
   })
 
   ## Pie chart people plot -----------------------------------------------------
