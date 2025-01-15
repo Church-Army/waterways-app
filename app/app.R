@@ -122,7 +122,7 @@ if(is.data.frame(data)){
                  n_general    = how_many_general_conversations_have_you_had_within_the_reporting_period,
                  people       = how_would_you_describe_the_people_you_have_spoken_to_please_tick_all_that_apply,
                  concerns     = which_of_the_following_concerns_were_identified_by_your_conversations,
-                 comments     = do_you_have_any_other_comments_about_your_recent_interactions_that_you_would_like_to_share)
+                 comments     = do_you_have_any_other_comments_about_your_recent_interactions_that_you_would_like_to_share_if_yes_to_question_above_please_elaborate_here_thanks)
 
   data <-
     relocate(data, hub, .after = month) |>
@@ -623,7 +623,7 @@ server <- function(input, output) {
       plot_out <- ggplot()
       concerns_colours <- character()
 
-    }else if(input$is_concerns_pie){
+    }else if(input$is_concerns_pie){2
 
       plot_data <-
         mutate(concerns_plot_data,
