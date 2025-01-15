@@ -19,7 +19,7 @@ library(digest)
 library(shinyWidgets)
 library(purrr)
 library(cli)
-
+library(gargle)
 
 #### THIS CODE ALWAYS RUNS #####################################################
 
@@ -27,8 +27,8 @@ library(cli)
 gs4_deauth()
 drive_deauth()
 
-auth_cache <- "secrets"
-gs4_auth(email = TRUE, cache = auth_cache)
+auth_cache <- here("secrets")
+gs4_auth(email = TRUE, cache = auth_cache, scopes = "spreadsheets.readonly")
 drive_auth(email = TRUE, cache = auth_cache)
 
 ## Miscellaneous helpers -------------------------------------------------------
