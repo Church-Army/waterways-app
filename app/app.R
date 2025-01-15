@@ -18,6 +18,7 @@ library(forcats)
 library(digest)
 library(shinyWidgets)
 library(purrr)
+library(cli)
 
 
 #### THIS CODE ALWAYS RUNS #####################################################
@@ -70,7 +71,7 @@ fill_colours <-
 specified <- function(x, default = "") length(x) > 0 && x != default
 
 get_month <- function(x, toString = FALSE){
-  out <- make_date(year = year(x), month = month(x))
+  out <- round_date(x, "month")
   if(toString) out <- str_extract(out, "\\d{4}-\\d{2}")
   out
 }
@@ -286,14 +287,14 @@ ui <- fluidPage(
                  width = 10
                  ))))),
 
-    tabPanel("Who are we talking to?",
+    tabPanel("Who are we we talking to?",
              uiOutput("people_picker_pie"),
              mainPanel(plotOutput("people_pie_chart", height = "550px"))
              ),
 
 
     ## WHAT ARE WE TALKING ABOUT? ==============================================
-    tabPanel("What are we talking about?",
+    tabPanel("What are people talking to us about?",
                uiOutput("concerns_picker_hbar"),
                mainPanel(plotOutput("horizontal_concerns_bar", height = "600px"))
              ),
@@ -359,7 +360,7 @@ server <- function(input, output) {
                         value = TRUE)
         ),
         actionButton("generate_reports", "Generate monthly reports"),
-        verbatimTextOutput("report_gen_message"),
+        htmlOutput("report_gen_message"),
         h2("Reporting engagement"),
         renderPlot({
           reporting <-
@@ -400,14 +401,12 @@ server <- function(input, output) {
     report_data <-
       data |>
       filter(month(month) %in% months, year(month) == year) |>
-      filter_hub(isolate(input$report_hubs)) |>
+      filter_hub(isolate(input$report_hub)) |>
       group_by(month)
 
-
     if(isolate(input$report_type) == "Comprehensive reports"){
-
-      drive_dir <- if_else(isolate(input$report_hub == "All"), "Monthly summary reports", "Hub reports")
       hub_dir <- ifelse(isolate(input$report_hub) == "All", "", isolate(input$report_hub))
+      drive_dir <- if_else(isolate(input$report_hub == "All"), "Monthly summary reports", "Hub reports")
       file_prefix <- "monthly-summary"
 
       conversations <-
@@ -425,7 +424,8 @@ server <- function(input, output) {
 
     } else if(isolate(input$report_type) == "'Other comments' reports"){
 
-      drive_dir <- "'Other comments' reports"
+      hub_dir <- ifelse(isolate(input$report_hub) == "All", "", isolate(input$report_hub))
+      drive_dir <- ifelse(isolate(input$report_hub) == "All", "'Other comments' reports", "Hub reports")
       file_prefix <- "comments"
 
       report_data <-
@@ -460,7 +460,7 @@ server <- function(input, output) {
     tmp <- dir_create("tmp")
 
     drive_paths <-
-      imap_chr(report_data,
+      imap(report_data,
           \(data, month){
 
             file_name <- str_c(file_prefix, month, isolate(input$report_hub), sep = "_")
@@ -472,19 +472,30 @@ server <- function(input, output) {
 
             drive_mv(report_sheet, path = drive_path, overwrite = TRUE)
 
-            drive_path
+            id <- drive_get(drive_path)$id
+            link <- str_c("https://docs.google.com/spreadsheets/d/", id)
+
+            a(drive_path, href = link, target = "_blank", rel = "noopener noreferrer")
+
           })
 
     removeModal()
 
-    output$report_gen_message <- renderPrint({
+    html_list <- function(list_items){
+      ul <- tags$ul()
+
+      ul$children <- map(list_items, \(x) tags$li(x))
+      ul
+    }
+
+    output$report_gen_message <- renderUI({
       reports <- length(report_data)
-      cat("Generated", reports, "report(s) with the following name(s):\n")
-      cat(drive_paths, sep = "\n")
-      cat("\nThese reports can be found in the Google Drive folder 'waterways chaplains reporting/",
-          drive_dir, "'.",
-          sep = "")
-    })
+      div(
+        br(),
+        p("Generated", strong(reports), strong("report(s)"),  "in the following location(s):\n"),
+        html_list(drive_paths)
+      )
+      })
 
     dir_delete("tmp")
   })
@@ -684,7 +695,7 @@ server <- function(input, output) {
       scale_fill_manual(values = concerns_colours,
                         guide = guide_legend(),
                         name = "Concerns") +
-      ggtitle("What are we talking about?", sub = date_caption(input$concerns_hbar_daterange))
+      ggtitle("What are people talking to us about?", sub = date_caption(input$concerns_hbar_daterange))
   })
 
   ## Pie chart people plot -----------------------------------------------------
