@@ -503,7 +503,7 @@ server <- function(input, output) {
   ## outputs for page 1: -------------------------------------------------------
   output$total_meaningful <- renderText({
     val <-
-      filter(data, month >= floor_date(year_ago())) |>
+      filter(data, month >= floor_date(year_ago(), "month")) |>
       pull(n_meaningful) |>
       sum(na.rm = TRUE)
 
@@ -512,7 +512,7 @@ server <- function(input, output) {
 
   output$total_general <- renderText({
     val <-
-      filter(data, month >= floor_date(year_ago())) |>
+      filter(data, month >= floor_date(year_ago(), "month")) |>
       pull(n_general) |>
       sum(na.rm = TRUE)
 

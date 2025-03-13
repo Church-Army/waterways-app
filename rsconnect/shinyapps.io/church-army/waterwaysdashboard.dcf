@@ -1,0 +1,10 @@
+name: waterwaysdashboard
+title:
+username: church-army
+account: church-army
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 11676710
+bundleId:
+url: https://church-army.shinyapps.io/waterwaysdashboard/
+version: 1
