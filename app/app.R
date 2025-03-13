@@ -47,7 +47,7 @@ year_ago <- function(from = today()){
   from - days(365)
 }
 
-month_ago <- function(from = today()){
+
   from - months(1)
 }
 
@@ -270,7 +270,7 @@ ui <- fluidPage(
            fluidPage(
              fluidRow(
                div(
-                 h1("So far this year:"),
+                 h1("In the past 12 months:"),
                  p("We have had over ",
                    strong(textOutput("total_general", inline = TRUE)), " conversations and over",
                    strong(textOutput("total_meaningful", inline = TRUE)), " meaningful conversations on Britain's Waterways."),
@@ -502,11 +502,21 @@ server <- function(input, output) {
 
   ## outputs for page 1: -------------------------------------------------------
   output$total_meaningful <- renderText({
-    as.character(sum(data[["n_meaningful"]], na.rm = TRUE))
+    val <-
+      filter(data, month >= floor_date(year_ago())) |>
+      pull(n_meaningful) |>
+      sum(na.rm = TRUE)
+
+    as.character(val)
   })
 
   output$total_general <- renderText({
-    as.character(sum(data[["n_general"]], na.rm = TRUE) + sum(data[["n_meaningful"]], na.rm = TRUE))
+    val <-
+      filter(data, month >= floor_date(year_ago())) |>
+      pull(n_general) |>
+      sum(na.rm = TRUE)
+
+    as.character(val)
   })
 
   mainpage_plot_data <-
