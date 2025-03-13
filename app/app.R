@@ -695,7 +695,8 @@ server <- function(input, output) {
       scale_fill_manual(values = concerns_colours,
                         guide = guide_legend(),
                         name = "Concerns") +
-      ggtitle("What are people talking to us about?", sub = date_caption(input$concerns_hbar_daterange))
+      ggtitle("What are people talking to us about?", sub = date_caption(input$concerns_hbar_daterange)) +
+      theme(title = element_text(size = 25))
   })
 
   ## Pie chart people plot -----------------------------------------------------
