@@ -48,9 +48,6 @@ year_ago <- function(from = today()){
 }
 
 
-  from - months(1)
-}
-
 prettify <- function(x) {
   capitalise(x) |>
     str_replace_all("_", " ")
