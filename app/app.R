@@ -47,7 +47,7 @@ year_ago <- function(from = today()){
   from - days(365)
 }
 
-
+month_ago <- function(from = today()){
   from - months(1)
 }
 
