@@ -25,10 +25,10 @@ library(gargle)
 
 # credentials and authentication -----------------------------------------------
 gs4_deauth()
-drive_deauth()
 
 auth_cache <- here("secrets")
 gs4_auth(email = TRUE, cache = auth_cache, scopes = "spreadsheets.readonly")
+drive_deauth()
 drive_auth(email = TRUE, cache = auth_cache)
 
 ## Miscellaneous helpers -------------------------------------------------------
