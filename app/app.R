@@ -214,7 +214,7 @@ server <- function(input, output) {
                      error = identity
                    )
 
-                   incProgress(65, detail = "Formatting data")
+                   incProgress(20, detail = "Fetching data")
 
                    if (is.data.frame(data)) {
                      data <- clean_names(data)
@@ -237,6 +237,8 @@ server <- function(input, output) {
                      ## Tally counts from comma-delimited string columns (widening data) ----------
 
                      data <- mutate(data, across(c(people, concerns), str_to_lower))
+
+                     incProgress(20, detail = "Fetching data")
 
                      data <- tally_delimited_string(
                        data,
@@ -262,6 +264,8 @@ server <- function(input, output) {
                        other_tally_suffix = "other"
                      ) |>
                        rename(people_fisher_men_women = people_fisher_wo_men)
+
+                     incProgress(25, detail = "Formatting data")
 
                      data <- tally_delimited_string(
                        data,
@@ -305,7 +309,8 @@ server <- function(input, output) {
                      conversation_responses <-
                        c("None", "One", "Two", "Three", "Four")
 
-                     incProgress(20, detail = "Finalising")
+                     incProgress(15, detail = "Finalising")
+
                      data <- mutate(data,
                                     across(c(n_meaningful, n_general),
                                            \(x) {
