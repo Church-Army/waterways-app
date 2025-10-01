@@ -201,104 +201,146 @@ ui <- fluidPage(
 
 server <- function(input, output) {
 
-  # attempt to read sheet --------------------------------------------------------
-  secret_sheet <- "14qI8A51Op2Ri3yfwD1t2AQZ1fxki-KUFb7_EEyvO4Lo"
-  data <- tryCatch(read_sheet(secret_sheet), error = identity)
+  sheet_data <- reactive({
+    withProgress(message = "Processing data", value = 0, max = 100,
+                 {
+                   # attempt to read sheet --------------------------------------------------------
+                   incProgress(15, detail = "Fetching data")
 
-  if(is.data.frame(data)){
+                   secret_sheet <-
+                     "14qI8A51Op2Ri3yfwD1t2AQZ1fxki-KUFb7_EEyvO4Lo"
+                   data <- tryCatch(
+                     read_sheet(secret_sheet),
+                     error = identity
+                   )
 
-    data <- clean_names(data)
+                   incProgress(65, detail = "Formatting data")
 
-    data <- rename(data,
-                   month        = in_what_month_of_the_year_did_these_conversations_take_place,
-                   hub          = which_hub_are_you_reporting_from,
-                   n_meaningful = how_many_meaningful_conversations_have_you_had_within_the_reporting_period,
-                   n_general    = how_many_general_conversations_have_you_had_within_the_reporting_period,
-                   people       = how_would_you_describe_the_people_you_have_spoken_to_please_tick_all_that_apply,
-                   concerns     = which_of_the_following_concerns_were_identified_by_your_conversations,
-                   comments     = do_you_have_any_other_comments_about_your_recent_interactions_that_you_would_like_to_share_if_yes_to_question_above_please_elaborate_here_thanks)
+                   if (is.data.frame(data)) {
+                     data <- clean_names(data)
 
-    data <-
-      relocate(data, hub, .after = month) |>
-      mutate(hub  = factor(hub))
+                     data <- rename(
+                       data,
+                       month        = in_what_month_of_the_year_did_these_conversations_take_place,
+                       hub          = which_hub_are_you_reporting_from,
+                       n_meaningful = how_many_meaningful_conversations_have_you_had_within_the_reporting_period,
+                       n_general    = how_many_general_conversations_have_you_had_within_the_reporting_period,
+                       people       = how_would_you_describe_the_people_you_have_spoken_to_please_tick_all_that_apply,
+                       concerns     = which_of_the_following_concerns_were_identified_by_your_conversations,
+                       comments     = do_you_have_any_other_comments_about_your_recent_interactions_that_you_would_like_to_share_if_yes_to_question_above_please_elaborate_here_thanks
+                     )
 
-    ## Tally counts from comma-delimited string columns (widening data) ----------
+                     data <-
+                       relocate(data, hub, .after = month) |>
+                       mutate(hub  = factor(hub))
 
-    data <- mutate(data, across(c(people, concerns), str_to_lower))
+                     ## Tally counts from comma-delimited string columns (widening data) ----------
 
-    data <- tally_delimited_string(data, people,
-                                   keep =
-                                     str_to_lower(
-                                       c("Ex HM forces", "Fisher(wo)men", "Homeless", "Leisure hirers/visitors",
-                                         "Leisure owners", "Liveaboards", "Navigation authority staff or volunteers",
-                                         "Towpath users", "Waterside business staff", "Waterside residents",
-                                         "Boatyards", "Marina staff")
-                                     ),
-                                   other_suffix = "other_text",
-                                   other_tally_suffix = "other"
-    ) |>
-      rename(people_fisher_men_women = people_fisher_wo_men)
+                     data <- mutate(data, across(c(people, concerns), str_to_lower))
 
-    data <- tally_delimited_string(data, concerns,
-                                   keep = c("financial hardship/benefits", "physical health", "mental health",
-                                            "suicidal thoughts", "ptsd", "faith and religion", "boat worthiness",
-                                            "boat licensing and mooring", "addiction (alcohol and/or drugs)",
-                                            "homelessness", "personal relationships", "(un)employment",
-                                            "crime", "death and bereavement", "moving onto land"
-                                   ),
-                                   other_suffix = "other_text",
-                                   other_tally_suffix = "other")
+                     data <- tally_delimited_string(
+                       data,
+                       people,
+                       keep =
+                         str_to_lower(
+                           c(
+                             "Ex HM forces",
+                             "Fisher(wo)men",
+                             "Homeless",
+                             "Leisure hirers/visitors",
+                             "Leisure owners",
+                             "Liveaboards",
+                             "Navigation authority staff or volunteers",
+                             "Towpath users",
+                             "Waterside business staff",
+                             "Waterside residents",
+                             "Boatyards",
+                             "Marina staff"
+                           )
+                         ),
+                       other_suffix = "other_text",
+                       other_tally_suffix = "other"
+                     ) |>
+                       rename(people_fisher_men_women = people_fisher_wo_men)
 
-    data <- rename(data,
-                   other_text_people   =  people_other_text,
-                   other_text_concerns = concerns_other_text)
+                     data <- tally_delimited_string(
+                       data,
+                       concerns,
+                       keep = c(
+                         "financial hardship/benefits",
+                         "physical health",
+                         "mental health",
+                         "suicidal thoughts",
+                         "ptsd",
+                         "faith and religion",
+                         "boat worthiness",
+                         "boat licensing and mooring",
+                         "addiction (alcohol and/or drugs)",
+                         "homelessness",
+                         "personal relationships",
+                         "(un)employment",
+                         "crime",
+                         "death and bereavement",
+                         "moving onto land"
+                       ),
+                       other_suffix = "other_text",
+                       other_tally_suffix = "other"
+                     )
 
-    data <- mutate(data, response_id = str_c("r_", row_number()))
+                     data <- rename(data,
+                                    other_text_people   =  people_other_text,
+                                    other_text_concerns = concerns_other_text)
 
-    ## Converting conversations to numeric ---------------------------------------
+                     data <- mutate(data, response_id = str_c("r_", row_number()))
 
-    data <- mutate(data,
-                   across(where(is.list),
-                          \(x){
-                            modify_if(x, is.null, \(y) NA) |>
-                              as.character()
-                          })
-    )
+                     ## Converting conversations to numeric ---------------------------------------
 
-    conversation_responses <- c("None", "One", "Two", "Three", "Four")
+                     data <- mutate(data,
+                                    across(where(is.list),
+                                           \(x) {
+                                             modify_if(x, is.null, \(y) NA) |>
+                                               as.character()
+                                           }))
 
-    data <- mutate(
-      data,
-      across(c(n_meaningful, n_general),
-             \(x){
-               numeric_x <- as.numeric(x)
-               matched_x <- match(x, conversation_responses) - 1
+                     conversation_responses <-
+                       c("None", "One", "Two", "Three", "Four")
 
-               matched_x[is.na(matched_x)] <- numeric_x[is.na(matched_x)]
-               matched_x[is.na(matched_x)] <- 0
+                     incProgress(20, detail = "Finalising")
+                     data <- mutate(data,
+                                    across(c(n_meaningful, n_general),
+                                           \(x) {
+                                             numeric_x <- as.numeric(x)
+                                             matched_x <- match(x, conversation_responses) - 1
 
-               matched_x
-             }
-      )
-    )
+                                             matched_x[is.na(matched_x)] <-
+                                               numeric_x[is.na(matched_x)]
+                                             matched_x[is.na(matched_x)] <- 0
 
-    ## Add month-level date-time marker
-    data <-
-      mutate(data,
-             month = make_date(year(timestamp), match(month, month.name)),
-             # if this month hadn't started at the time of data collection,
-             # assume we're talking about the nearest preceding month
-             # (A 'December' collection in Jan will be for December last year.)
-             month = if_else(month > timestamp, year_ago(month), month)
-      )
+                                             matched_x
+                                           }))
+
+                     ## Add month-level date-time marker
+                     data <-
+                       mutate(
+                         data,
+                         month = make_date(year(timestamp), match(month, month.name)),
+                         # if this month hadn't started at the time of data collection,
+                         # assume we're talking about the nearest preceding month
+                         # (A 'December' collection in Jan will be for December last year.)
+                         month = if_else(month > timestamp, year_ago(month), month)
+                       )
+                   }
+                 })
+    })
 
     ## Adding concern group codes to data ----------------------------------------
 
-    concerns_categories <- vroom("data/concerns-categories.csv", delim = ",", col_types = "cc")
 
-    concerns <-
+    concerns <- reactive({
 
-      pivot_longer(data, starts_with("concerns_"),
+      concerns_categories <- vroom("data/concerns-categories.csv", delim = ",", col_types = "cc")
+
+      pivot_longer(sheet_data(), starts_with("concerns_"),
                    names_to = "concern", values_to = "is_concern") |>
 
       select(response_id, concern, is_concern) |>
@@ -313,12 +355,13 @@ server <- function(input, output) {
       pivot_wider(names_from = concern_category,
                   values_from = is_concern,
                   names_prefix = "concern_")
+    })
 
-    generalised_data <-
-      data |>
+    generalised_data <- reactive({
+      sheet_data() |>
       select(-starts_with("concern_")) |>
-      left_join(concerns, by = "response_id")
-  }
+      left_join(concerns(), by = "response_id")
+    })
 
   ## Password protection for admin area === === === === === === === === === ===
   valid_password <- reactiveVal(FALSE)
@@ -364,9 +407,10 @@ server <- function(input, output) {
         actionButton("generate_reports", "Generate monthly reports"),
         htmlOutput("report_gen_message"),
         h2("Reporting engagement"),
+
         renderPlot({
           reporting <-
-            data |>
+            sheet_data() |>
             summarise(reports = n(), chaplains = n_distinct(email_address), .by = c(month)) |>
             pivot_longer(c(reports, chaplains), names_to = "stat", values_to = "count")
 
@@ -401,7 +445,7 @@ server <- function(input, output) {
     year <- input$report_year
 
     report_data <-
-      data |>
+      sheet_data() |>
       filter(month(month) %in% months, year(month) == year) |>
       filter_hub(isolate(input$report_hub)) |>
       group_by(month)
@@ -505,7 +549,7 @@ server <- function(input, output) {
   ## outputs for page 1: -------------------------------------------------------
   output$total_meaningful <- renderText({
     val <-
-      filter(data, month >= floor_date(year_ago(), "month")) |>
+      filter(sheet_data(), month >= floor_date(year_ago(), "month")) |>
       pull(n_meaningful) |>
       sum(na.rm = TRUE)
 
@@ -514,19 +558,20 @@ server <- function(input, output) {
 
   output$total_general <- renderText({
     val <-
-      filter(data, month >= floor_date(year_ago(), "month")) |>
+      filter(sheet_data(), month >= floor_date(year_ago(), "month")) |>
       pull(n_general) |>
       sum(na.rm = TRUE)
 
     as.character(val)
   })
 
-  mainpage_plot_data <-
-    generalised_data |>
-    pivot_longer(starts_with("concern_"),
-                 names_prefix = "concern_",
-                 names_to = "concern",
-                 values_to = "identified")
+  mainpage_plot_data <- reactive({
+
+      generalised_data() |>
+      pivot_longer(starts_with("concern_"),
+                   names_prefix = "concern_",
+                   names_to = "concern",
+                   values_to = "identified") |>
 
     # NB currently we treat 1 or more occurrences of the same concerns within
     # a month by the same chaplain as equivalent values, since a return could
@@ -534,37 +579,36 @@ server <- function(input, output) {
     # occurrences ongoingly, so currently this seems like the most responsible way
     # to report
 
-  mainpage_plot_data <-
-    summarise(mainpage_plot_data,
-              occured = any(identified),
+    summarise(occured = any(identified),
               .by = c(concern, email_address, month, hub)) |>
     mutate(concern = prettify(concern))
+  })
 
   output$concerns_picker_mainpage <- renderUI({
     concerns_picker(prefix = "concerns_mainpage",
-                    choices = unique(mainpage_plot_data[["concern"]]),
+                    choices = unique(mainpage_plot_data()[["concern"]]),
                     randomly_select = 2,
-                    hubs = as.character(unique(mainpage_plot_data[["hub"]])),
+                    hubs = as.character(unique(mainpage_plot_data()[["hub"]])),
                     width = 2)
   })
 
   output$concerns_plot <- renderPlot({
 
     if(is.null(input$concerns_mainpage_hubs) || input$concerns_mainpage_hubs == "All"){
-      mainpage_hub <- as.character(unique(mainpage_plot_data[["hub"]]))
+      mainpage_hub <- as.character(unique(mainpage_plot_data()[["hub"]]))
     } else mainpage_hub <- input$concerns_mainpage_hubs
 
-    mainpage_plot_data <-
-      filter(mainpage_plot_data, hub %in% mainpage_hub) |>
+    dat <-
+      filter(mainpage_plot_data(), hub %in% mainpage_hub) |>
       summarise(count = sum(occured), .by = c(concern, month)) |>
       mutate(concern =
                ordered(concern) |>
                fct_reorder(-count))
 
-    highlight <- filter(mainpage_plot_data, concern %in% input$concerns_mainpage_highlight)
-    lowlight  <- filter(mainpage_plot_data, !concern %in% input$concerns_mainpage_highlight)
+    highlight <- filter(dat, concern %in% input$concerns_mainpage_highlight)
+    lowlight  <- filter(dat, !concern %in% input$concerns_mainpage_highlight)
 
-    mainpage_plot_colours <- plot_colours(mainpage_plot_data$concern, .f = \(x) hue_pal()(n_distinct(x)))
+    mainpage_plot_colours <- plot_colours(dat$concern, .f = \(x) hue_pal()(n_distinct(x)))
 
     ggplot(lowlight, aes(x = month, y = count, group = concern)) +
 
@@ -597,14 +641,14 @@ server <- function(input, output) {
   output$xlsx_download <- downloadHandler(
     filename = str_c("waterways-chaplains-interactions_", Sys.Date(), ".csv"),
     content = function(file){
-      download_content <- select(data, -email_address)
+      download_content <- select(sheet_data(), -email_address)
       vroom_write(download_content, file, delim = ",")
     }
   )
 
 
-  concerns_plot_data <-
-    data |>
+  concerns_plot_data <- reactive({
+    sheet_data() |>
     pivot_longer(starts_with("concerns_"),
                  names_to = "concern",
                  values_to = "indicated") |>
@@ -615,17 +659,18 @@ server <- function(input, output) {
              ordered()) |>
     # indicated by a given chaplain in a given month
     summarise(indicated = any(indicated), .by = c(email_address, concern, hub, month))
+  })
 
-  concerns_colours <- plot_colours(concerns_plot_data$concern)
-
-  picker_choices <- unique(concerns_plot_data[["concern"]])
-  picker_choices <- picker_choices[picker_choices != "Other"]
 
   output$concerns_picker_hbar <- renderUI({
+
+    picker_choices <- unique(concerns_plot_data()[["concern"]])
+    picker_choices <- picker_choices[picker_choices != "Other"]
+
     concerns_picker(prefix = "concerns_hbar",
                     choices = picker_choices,
                     width = 2,
-                    hubs = unique(as.character(concerns_plot_data[["hub"]])),
+                    hubs = unique(as.character(concerns_plot_data()[["hub"]])),
                     date_start = month_ago(),
                     switchInput("is_concerns_pie",
                                 label = "Switch to:",
@@ -635,8 +680,10 @@ server <- function(input, output) {
   ## Horizontal-bar/pie concerns plot --------------------------------------------------
   output$horizontal_concerns_bar <- renderPlot({
 
-    concerns_plot_data <-
-      filter_hub(concerns_plot_data, input$concerns_hbar_hubs) |>
+    concerns_colours <- plot_colours(concerns_plot_data()$concern)
+
+    dat <-
+      filter_hub(concerns_plot_data(), input$concerns_hbar_hubs) |>
       filter_date(input$concerns_hbar_daterange) |>
       summarise(count = sum(indicated), .by = concern)
 
@@ -649,7 +696,7 @@ server <- function(input, output) {
     }else if(input$is_concerns_pie){2
 
       plot_data <-
-        mutate(concerns_plot_data,
+        mutate(dat,
                concern = try_fct_other(concern, keep = input$concerns_hbar_highlight)) |>
 
         summarise(count = sum(count), .by = concern) |>
@@ -681,7 +728,7 @@ server <- function(input, output) {
     } else {
 
       plot_data <-
-      filter(concerns_plot_data,
+      filter(dat,
              concern %in% input$concerns_hbar_highlight,
              count > 0,
              concern != "Other")
@@ -714,8 +761,8 @@ server <- function(input, output) {
   ## Pie chart people plot -----------------------------------------------------
 
 
-  people_plot_data <-
-    data |>
+  people_plot_data <- reactive({
+    sheet_data() |>
     pivot_longer(starts_with("people_"),
                  names_to = "people",
                  values_to = "indicated") |>
@@ -725,49 +772,47 @@ server <- function(input, output) {
              str_replace_all("_", " ") |>
              ordered()) |>
     # indicated by a given chaplain in a given month
-    summarise(indicated = any(indicated), .by = c(email_address, people, hub, month))
-
-  people_plot_data <-
-    mutate(people_plot_data,
-           people = fct_recode(people,
+    summarise(indicated = any(indicated), .by = c(email_address, people, hub, month)) |>
+      mutate(people = fct_recode(people,
                                `Navigation authority` = "Navigation authority staff or volunteers",
                                `Homeless people` = "Homeless",
                                `Leisure hirers/visitors` = "Leisure hirers visitors",
                                `Fishermen/women` = "Fisher men women"))
+  })
 
-  people_choices <- unique(people_plot_data$people)
+  people_choices <- reactive({unique(people_plot_data()$people)})
 
 
   output$people_picker_pie <- renderUI({
     concerns_picker(prefix = "people_pie",
-                    choices = people_choices,
+                    choices = people_choices(),
                     width = 2,
                     date_start = month_ago(),
-                    hubs = unique(as.character(people_plot_data[["hub"]])))
+                    hubs = unique(as.character(people_plot_data()[["hub"]])))
   })
 
   output$people_pie_chart <- renderPlot({
 
-    people_plot_colours <- plot_colours(people_plot_data$people)
+    people_plot_colours <- plot_colours(people_plot_data()$people)
 
-    people_plot_data <-
-      filter_hub(people_plot_data, input$people_pie_hubs) |>
+    dat <-
+      filter_hub(people_plot_data(), input$people_pie_hubs) |>
       filter_date(input$people_pie_daterange)
 
-      people_plot_data <-
-        mutate(people_plot_data,
+      dat <-
+        mutate(dat,
                people =
                  try_fct_other(people, keep = input$people_pie_highlight) |>
                  fct_relevel("Other", after = Inf))
 
-    people_plot_data <-
-      summarise(people_plot_data, count = sum(indicated), .by = c(people)) |>
+    dat <-
+      summarise(dat, count = sum(indicated), .by = c(people)) |>
       mutate(prop = count/sum(count)) |>
       filter(prop > 0)
 
-    if(nrow(people_plot_data) > 0){
+    if(nrow(dat) > 0){
 
-      ggplot(people_plot_data, aes(x = 1, y = count, fill = people)) +
+      ggplot(dat, aes(x = 1, y = count, fill = people)) +
 
       geom_col(width = 0.7, colour = "black") +
 
