@@ -108,124 +108,7 @@ date_caption <- function(dates){
   str_c("Between", dates[1], "and", dates[2], sep = " ")
 }
 
-# attempt to read sheet --------------------------------------------------------
-secret_sheet <- "14qI8A51Op2Ri3yfwD1t2AQZ1fxki-KUFb7_EEyvO4Lo"
-data <- tryCatch(read_sheet(secret_sheet), error = identity)
 
-if(is.data.frame(data)){
-
-  data <- clean_names(data)
-
-  data <- rename(data,
-                 month        = in_what_month_of_the_year_did_these_conversations_take_place,
-                 hub          = which_hub_are_you_reporting_from,
-                 n_meaningful = how_many_meaningful_conversations_have_you_had_within_the_reporting_period,
-                 n_general    = how_many_general_conversations_have_you_had_within_the_reporting_period,
-                 people       = how_would_you_describe_the_people_you_have_spoken_to_please_tick_all_that_apply,
-                 concerns     = which_of_the_following_concerns_were_identified_by_your_conversations,
-                 comments     = do_you_have_any_other_comments_about_your_recent_interactions_that_you_would_like_to_share_if_yes_to_question_above_please_elaborate_here_thanks)
-
-  data <-
-    relocate(data, hub, .after = month) |>
-    mutate(hub  = factor(hub))
-
-  ## Tally counts from comma-delimited string columns (widening data) ----------
-
-  data <- mutate(data, across(c(people, concerns), str_to_lower))
-
-  data <- tally_delimited_string(data, people,
-                                 keep =
-                                   str_to_lower(
-                                     c("Ex HM forces", "Fisher(wo)men", "Homeless", "Leisure hirers/visitors",
-                                       "Leisure owners", "Liveaboards", "Navigation authority staff or volunteers",
-                                       "Towpath users", "Waterside business staff", "Waterside residents",
-                                       "Boatyards", "Marina staff")
-                                     ),
-                                 other_suffix = "other_text",
-                                 other_tally_suffix = "other"
-                                 ) |>
-    rename(people_fisher_men_women = people_fisher_wo_men)
-
-  data <- tally_delimited_string(data, concerns,
-                                 keep = c("financial hardship/benefits", "physical health", "mental health",
-                                          "suicidal thoughts", "ptsd", "faith and religion", "boat worthiness",
-                                          "boat licensing and mooring", "addiction (alcohol and/or drugs)",
-                                          "homelessness", "personal relationships", "(un)employment",
-                                          "crime", "death and bereavement", "moving onto land"
-                                          ),
-                                 other_suffix = "other_text",
-                                 other_tally_suffix = "other")
-
-  data <- rename(data,
-                 other_text_people   =  people_other_text,
-                 other_text_concerns = concerns_other_text)
-
-  data <- mutate(data, response_id = str_c("r_", row_number()))
-
-  ## Converting conversations to numeric ---------------------------------------
-
-  data <- mutate(data,
-                 across(where(is.list),
-                        \(x){
-                          modify_if(x, is.null, \(y) NA) |>
-                            as.character()
-                        })
-  )
-
-  conversation_responses <- c("None", "One", "Two", "Three", "Four")
-
-  data <- mutate(
-    data,
-    across(c(n_meaningful, n_general),
-           \(x){
-             numeric_x <- as.numeric(x)
-             matched_x <- match(x, conversation_responses) - 1
-
-             matched_x[is.na(matched_x)] <- numeric_x[is.na(matched_x)]
-             matched_x[is.na(matched_x)] <- 0
-
-             matched_x
-           }
-           )
-    )
-
-  ## Add month-level date-time marker
-  data <-
-    mutate(data,
-           month = make_date(year(timestamp), match(month, month.name)),
-           # if this month hadn't started at the time of data collection,
-           # assume we're talking about the nearest preceding month
-           # (A 'December' collection in Jan will be for December last year.)
-           month = if_else(month > timestamp, year_ago(month), month)
-           )
-
-  ## Adding concern group codes to data ----------------------------------------
-
-  concerns_categories <- vroom("data/concerns-categories.csv", delim = ",", col_types = "cc")
-
-  concerns <-
-
-    pivot_longer(data, starts_with("concerns_"),
-                 names_to = "concern", values_to = "is_concern") |>
-
-    select(response_id, concern, is_concern) |>
-
-    left_join(concerns_categories, by = c("concern")) |>
-
-    mutate(concern_category = replace_na(concern_category, "other")) |>
-
-    summarise(is_concern = any(is_concern),
-              .by = c(response_id, concern_category)) |>
-
-    pivot_wider(names_from = concern_category,
-                values_from = is_concern,
-                names_prefix = "concern_")
-
-  generalised_data <-
-    data |>
-    select(-starts_with("concern_")) |>
-    left_join(concerns, by = "response_id")
-}
 
 #### USER INTERFACE ############################################################
 
@@ -317,6 +200,125 @@ ui <- fluidPage(
 #### SERVER ####################################################################
 
 server <- function(input, output) {
+
+  # attempt to read sheet --------------------------------------------------------
+  secret_sheet <- "14qI8A51Op2Ri3yfwD1t2AQZ1fxki-KUFb7_EEyvO4Lo"
+  data <- tryCatch(read_sheet(secret_sheet), error = identity)
+
+  if(is.data.frame(data)){
+
+    data <- clean_names(data)
+
+    data <- rename(data,
+                   month        = in_what_month_of_the_year_did_these_conversations_take_place,
+                   hub          = which_hub_are_you_reporting_from,
+                   n_meaningful = how_many_meaningful_conversations_have_you_had_within_the_reporting_period,
+                   n_general    = how_many_general_conversations_have_you_had_within_the_reporting_period,
+                   people       = how_would_you_describe_the_people_you_have_spoken_to_please_tick_all_that_apply,
+                   concerns     = which_of_the_following_concerns_were_identified_by_your_conversations,
+                   comments     = do_you_have_any_other_comments_about_your_recent_interactions_that_you_would_like_to_share_if_yes_to_question_above_please_elaborate_here_thanks)
+
+    data <-
+      relocate(data, hub, .after = month) |>
+      mutate(hub  = factor(hub))
+
+    ## Tally counts from comma-delimited string columns (widening data) ----------
+
+    data <- mutate(data, across(c(people, concerns), str_to_lower))
+
+    data <- tally_delimited_string(data, people,
+                                   keep =
+                                     str_to_lower(
+                                       c("Ex HM forces", "Fisher(wo)men", "Homeless", "Leisure hirers/visitors",
+                                         "Leisure owners", "Liveaboards", "Navigation authority staff or volunteers",
+                                         "Towpath users", "Waterside business staff", "Waterside residents",
+                                         "Boatyards", "Marina staff")
+                                     ),
+                                   other_suffix = "other_text",
+                                   other_tally_suffix = "other"
+    ) |>
+      rename(people_fisher_men_women = people_fisher_wo_men)
+
+    data <- tally_delimited_string(data, concerns,
+                                   keep = c("financial hardship/benefits", "physical health", "mental health",
+                                            "suicidal thoughts", "ptsd", "faith and religion", "boat worthiness",
+                                            "boat licensing and mooring", "addiction (alcohol and/or drugs)",
+                                            "homelessness", "personal relationships", "(un)employment",
+                                            "crime", "death and bereavement", "moving onto land"
+                                   ),
+                                   other_suffix = "other_text",
+                                   other_tally_suffix = "other")
+
+    data <- rename(data,
+                   other_text_people   =  people_other_text,
+                   other_text_concerns = concerns_other_text)
+
+    data <- mutate(data, response_id = str_c("r_", row_number()))
+
+    ## Converting conversations to numeric ---------------------------------------
+
+    data <- mutate(data,
+                   across(where(is.list),
+                          \(x){
+                            modify_if(x, is.null, \(y) NA) |>
+                              as.character()
+                          })
+    )
+
+    conversation_responses <- c("None", "One", "Two", "Three", "Four")
+
+    data <- mutate(
+      data,
+      across(c(n_meaningful, n_general),
+             \(x){
+               numeric_x <- as.numeric(x)
+               matched_x <- match(x, conversation_responses) - 1
+
+               matched_x[is.na(matched_x)] <- numeric_x[is.na(matched_x)]
+               matched_x[is.na(matched_x)] <- 0
+
+               matched_x
+             }
+      )
+    )
+
+    ## Add month-level date-time marker
+    data <-
+      mutate(data,
+             month = make_date(year(timestamp), match(month, month.name)),
+             # if this month hadn't started at the time of data collection,
+             # assume we're talking about the nearest preceding month
+             # (A 'December' collection in Jan will be for December last year.)
+             month = if_else(month > timestamp, year_ago(month), month)
+      )
+
+    ## Adding concern group codes to data ----------------------------------------
+
+    concerns_categories <- vroom("data/concerns-categories.csv", delim = ",", col_types = "cc")
+
+    concerns <-
+
+      pivot_longer(data, starts_with("concerns_"),
+                   names_to = "concern", values_to = "is_concern") |>
+
+      select(response_id, concern, is_concern) |>
+
+      left_join(concerns_categories, by = c("concern")) |>
+
+      mutate(concern_category = replace_na(concern_category, "other")) |>
+
+      summarise(is_concern = any(is_concern),
+                .by = c(response_id, concern_category)) |>
+
+      pivot_wider(names_from = concern_category,
+                  values_from = is_concern,
+                  names_prefix = "concern_")
+
+    generalised_data <-
+      data |>
+      select(-starts_with("concern_")) |>
+      left_join(concerns, by = "response_id")
+  }
 
   ## Password protection for admin area === === === === === === === === === ===
   valid_password <- reactiveVal(FALSE)
