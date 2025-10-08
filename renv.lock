@@ -2711,6 +2711,7 @@
     "renv": {
       "Package": "renv",
       "Version": "1.1.5",
+<<<<<<< HEAD
       "Source": "Repository",
       "Type": "Package",
       "Title": "Project Environments",
@@ -2761,6 +2762,9 @@
       "Author": "Kevin Ushey [aut, cre] (ORCID: <https://orcid.org/0000-0003-2880-7407>), Hadley Wickham [aut] (ORCID: <https://orcid.org/0000-0003-4757-117X>), Posit Software, PBC [cph, fnd]",
       "Maintainer": "Kevin Ushey <kevin@rstudio.com>",
       "Repository": "RSPM"
+=======
+      "Source": "Repository"
+>>>>>>> 31e7d6302b7d71d1d1d4e09edf8d66ea79346176
     },
     "rlang": {
       "Package": "rlang",
