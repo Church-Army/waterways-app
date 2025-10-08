@@ -20,6 +20,7 @@ library(shinyWidgets)
 library(purrr)
 library(cli)
 library(gargle)
+library(words2number)
 
 #### THIS CODE ALWAYS RUNS #####################################################
 
@@ -119,8 +120,8 @@ if(is.data.frame(data)){
   data <- rename(data,
                  month        = in_what_month_of_the_year_did_these_conversations_take_place,
                  hub          = which_hub_are_you_reporting_from,
-                 n_meaningful = how_many_meaningful_conversations_have_you_had_within_the_reporting_period,
-                 n_general    = how_many_general_conversations_have_you_had_within_the_reporting_period,
+                 n_meaningful = how_many_meaningful_conversations_have_you_had_within_the_reporting_period_if_other_please_input_a_whole_number_e_g_12,
+                 n_general    = how_many_general_conversations_have_you_had_within_the_reporting_period_if_other_please_input_a_whole_number_e_g_12,
                  people       = how_would_you_describe_the_people_you_have_spoken_to_please_tick_all_that_apply,
                  concerns     = which_of_the_following_concerns_were_identified_by_your_conversations,
                  comments     = do_you_have_any_other_comments_about_your_recent_interactions_that_you_would_like_to_share_if_yes_to_question_above_please_elaborate_here_thanks)
@@ -128,6 +129,12 @@ if(is.data.frame(data)){
   data <-
     relocate(data, hub, .after = month) |>
     mutate(hub  = factor(hub))
+
+  data <- mutate(
+    data,
+    across(c(n_meaningful, n_general),
+           )
+  )
 
   ## Tally counts from comma-delimited string columns (widening data) ----------
 
@@ -174,20 +181,29 @@ if(is.data.frame(data)){
 
   conversation_responses <- c("None", "One", "Two", "Three", "Four")
 
-  data <- mutate(
-    data,
+  try_number <- function(text){
+    tryCatch(
+      to_number(text),
+      error = \(cnd) text
+    )
+  }
+
+  data <-
+    rowwise(data) |>
+    mutate(
     across(c(n_meaningful, n_general),
            \(x){
-             numeric_x <- as.numeric(x)
-             matched_x <- match(x, conversation_responses) - 1
+             x <-
+               str_squish(x) |>
+               str_to_lower() |>
+               str_remove_all("[:punct:]")
 
-             matched_x[is.na(matched_x)] <- numeric_x[is.na(matched_x)]
-             matched_x[is.na(matched_x)] <- 0
+             x[x == "none"] <- 0
 
-             matched_x
-           }
-           )
-    )
+             try_number(x) |>
+               as.numeric()
+           })) |>
+    ungroup()
 
   ## Add month-level date-time marker
   data <-

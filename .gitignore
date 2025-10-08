@@ -4,12 +4,11 @@
 .httr-oauth
 .DS_Store
 .quarto
-
 # Ignore secrets, wherever they are
 **gmail.com$
 app/secrets
 secrets
-
 #Ingore rsconnect directory
 app/rsconnect
 app/tmp
+/home/dave/work-repos/waterways-app/secrets
