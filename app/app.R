@@ -222,8 +222,8 @@ server <- function(input, output) {
                        data,
                        month        = in_what_month_of_the_year_did_these_conversations_take_place,
                        hub          = which_hub_are_you_reporting_from,
-                       n_meaningful = how_many_meaningful_conversations_have_you_had_within_the_reporting_period,
-                       n_general    = how_many_general_conversations_have_you_had_within_the_reporting_period,
+                       n_meaningful = how_many_meaningful_conversations_have_you_had_within_the_reporting_period_if_other_please_input_a_whole_number_e_g_12,
+                       n_general    = how_many_general_conversations_have_you_had_within_the_reporting_period_if_other_please_input_a_whole_number_e_g_12,
                        people       = how_would_you_describe_the_people_you_have_spoken_to_please_tick_all_that_apply,
                        concerns     = which_of_the_following_concerns_were_identified_by_your_conversations,
                        comments     = do_you_have_any_other_comments_about_your_recent_interactions_that_you_would_like_to_share_if_yes_to_question_above_please_elaborate_here_thanks
@@ -331,19 +331,6 @@ server <- function(input, output) {
 
 
                      incProgress(15, detail = "Finalising")
-
-                     data <- mutate(data,
-                                    across(c(n_meaningful, n_general),
-                                           \(x) {
-                                             numeric_x <- as.numeric(x)
-                                             matched_x <- match(x, conversation_responses) - 1
-
-                                             matched_x[is.na(matched_x)] <-
-                                               numeric_x[is.na(matched_x)]
-                                             matched_x[is.na(matched_x)] <- 0
-
-                                             matched_x
-                                           }))
 
                      ## Add month-level date-time marker
                      data <-
