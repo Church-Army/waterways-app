@@ -256,7 +256,14 @@ server <- function(input, output) {
                              "Waterside business staff",
                              "Waterside residents",
                              "Boatyards",
-                             "Marina staff"
+                             "Marina staff",
+                             "Churches and/or church goers",
+                             "Hopsice staff",
+                             "Hospital staff",
+                             "Patients",
+                             "Council staff",
+                             "Boat club",
+                             "Parents and children"
                            )
                          ),
                        other_suffix = "other_text",
