@@ -140,6 +140,7 @@ concerns_picker <- function(...,
       "Concerns to highlight:",
       choices = choices,
       selected = sample(choices, randomly_select)
+
       )
     )
 }
@@ -153,7 +154,8 @@ ui <- fluidPage(
              fluidRow(
                div(
                  h1("In the past 12 months:"),
-                 p("We have had over ",
+                 p("We have spent a total of ", strong(textOutput("hours_worked", inline = TRUE)), " hours on Britan's waterways,",
+                   br(), "and we have had over ",
                    strong(textOutput("total_general", inline = TRUE)), " conversations and over",
                    strong(textOutput("total_meaningful", inline = TRUE)), " meaningful conversations on Britain's Waterways."),
                  style = "font-size:2em;"
@@ -226,16 +228,48 @@ server <- function(input, output) {
                        n_general    = how_many_general_conversations_have_you_had_within_the_reporting_period_if_other_please_input_a_whole_number_e_g_12,
                        people       = how_would_you_describe_the_people_you_have_spoken_to_please_tick_all_that_apply,
                        concerns     = which_of_the_following_concerns_were_identified_by_your_conversations,
-                       comments     = do_you_have_any_other_comments_about_your_recent_interactions_that_you_would_like_to_share_if_yes_to_question_above_please_elaborate_here_thanks
+                       comments     = do_you_have_any_other_comments_about_your_recent_interactions_that_you_would_like_to_share_if_yes_to_question_above_please_elaborate_here_thanks,
+                       hours_worked = how_many_hours_of_work_have_you_done_as_a_chaplain_since_you_last_reported
                      )
 
                      data <-
                        relocate(data, hub, .after = month) |>
                        mutate(hub  = factor(hub))
 
+                     ## Make lists into character vectors
+
+                     identity_but_it_coerces_null_to_na <-
+                       function(x){
+                         if(is.null(x)) NA
+                         else x
+                       }
+
+                     data <-
+                       mutate(
+                         data,
+                         across(c(n_meaningful, n_general, hours_worked),
+                                \(x) map_chr(x, identity_but_it_coerces_null_to_na)
+                                ))
+
                      ## Tally counts from comma-delimited string columns (widening data) ----------
 
                      data <- mutate(data, across(c(people, concerns), str_to_lower))
+
+                     get_hours_minutes <- function(x){
+
+                       x[is.na(x)] <- ""
+                       just_mins <- str_detect(x, "^\\d+ *[Mm]ins|[Mm]inutes$")
+
+                       out <-
+                         str_extract(x, "(\\d|\\.)+") |>
+                         as.numeric()
+
+                       out[just_mins] <- out[just_mins]/60
+
+                       out
+                       }
+
+                     data <- mutate(data, hours_worked = get_hours_minutes(hours_worked))
 
                      incProgress(20, detail = "Fetching data")
 
@@ -326,12 +360,12 @@ server <- function(input, output) {
                                 \(x){
                                   x <-
                                     str_squish(x) |>
-                                    str_to_lower() |>
-                                    str_remove_all("[:punct:]")
+                                    str_to_lower()
 
                                   x[x == "none"] <- 0
 
                                   try_number(x) |>
+                                    str_extract("(\\d|\\.)+") |>
                                     as.numeric()
                                 })) |>
                        ungroup()
@@ -352,6 +386,8 @@ server <- function(input, output) {
                    }
                  })
     })
+
+  output$hours_worked <- renderText(label_comma()(as.character(round(sum(sheet_data()$hours_worked, na.rm = TRUE)))))
 
     ## Adding concern group codes to data ----------------------------------------
 
@@ -573,7 +609,7 @@ server <- function(input, output) {
       pull(n_meaningful) |>
       sum(na.rm = TRUE)
 
-    as.character(val)
+    as.character(label_comma()(val))
   })
 
   output$total_general <- renderText({
@@ -582,7 +618,7 @@ server <- function(input, output) {
       pull(n_general) |>
       sum(na.rm = TRUE)
 
-    as.character(val)
+    as.character(label_comma()(val))
   })
 
   mainpage_plot_data <- reactive({
