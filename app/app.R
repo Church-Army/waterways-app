@@ -315,55 +315,41 @@ server <- function(input, output) {
     source_data <- mutate(source_data, hub = factor(hub))
 
     # Make (some) text fields lowercase -------------------------------
+    incProgress(15, detail = "Tallying string fields...")
     source_data <- mutate(source_data, across(c(people, concerns), str_to_lower))
+
+    source_data <-
+      tally_delimited_string(
+      source_data,
+      concerns,
+      keep = c(
+        "financial hardship/benefits",
+        "physical health",
+        "mental health",
+        "suicidal thoughts",
+        "ptsd",
+        "faith and religion",
+        "boat worthiness",
+        "boat licensing and mooring",
+        "addiction (alcohol and/or drugs)",
+        "homelessness",
+        "personal relationships",
+        "(un)employment",
+        "crime",
+        "death and bereavement",
+        "moving onto land"
+      ),
+      other_suffix = "other_text",
+      other_tally_suffix = "other"
+    )
+
+    source_data <- rename(source_data, other_text_concerns = concerns_other_text)
     },
 
     max = 100, message = "Preparing data") #withProgress
 
 
-
-  sheet_data <- reactive({
-    withProgress(message = "Processing data", value = 0, max = 100,
-                 {
-                   # attempt to read sheet --------------------------------------------------------
-                   incProgress(10, detail = "Fetching data")
-
-                     ## Tally counts from comma-delimited string columns (widening data) ----------
-
-                     incProgress(25, detail = "Delimiting string fields...")
-
-                     data <- tally_delimited_string(
-                       source_data,
-                       concerns,
-                       keep = c(
-                         "financial hardship/benefits",
-                         "physical health",
-                         "mental health",
-                         "suicidal thoughts",
-                         "ptsd",
-                         "faith and religion",
-                         "boat worthiness",
-                         "boat licensing and mooring",
-                         "addiction (alcohol and/or drugs)",
-                         "homelessness",
-                         "personal relationships",
-                         "(un)employment",
-                         "crime",
-                         "death and bereavement",
-                         "moving onto land"
-                       ),
-                       other_suffix = "other_text",
-                       other_tally_suffix = "other"
-                     )
-
-                     data <- rename(data, other_text_concerns = concerns_other_text)
-
-
-                     data
-                     })
-    })
-
-
+  sheet_data <- reactive({source_data})
 
     ## Adding concern group codes to data ----------------------------------------
 
