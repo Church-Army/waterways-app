@@ -20,7 +20,8 @@ library(shinyWidgets)
 library(purrr)
 library(cli)
 library(gargle)
-library(words2number)
+library(readr)
+library(rlang)
 
 #### THIS CODE ALWAYS RUNS #####################################################
 
@@ -207,100 +208,132 @@ server <- function(input, output) {
   secret_sheet <-
     "14qI8A51Op2Ri3yfwD1t2AQZ1fxki-KUFb7_EEyvO4Lo"
 
-  data <- tryCatch(
-    read_sheet(secret_sheet),
-    error = identity
-  )
 
-  source_data <-
+  withProgress({
+
+    # read sheet -------------------------------------------------------
+    incProgress(10, detail = "reading remote content...")
+    source_data <- tryCatch(range_speedread(secret_sheet, show_col_types = FALSE), error = identity)
+
+    # rename -----------------------------------------------------------
+    incProgress(15, detail = "formatting data structures...")
+    source_data <-
+      clean_names(source_data) |>
+      rename(
+        month        = in_what_month_of_the_year_did_these_conversations_take_place,
+        hub          = which_hub_are_you_reporting_from,
+        n_meaningful = how_many_meaningful_conversations_have_you_had_within_the_reporting_period_if_other_please_input_a_whole_number_e_g_12,
+        n_general    = how_many_general_conversations_have_you_had_within_the_reporting_period_if_other_please_input_a_whole_number_e_g_12,
+        people       = how_would_you_describe_the_people_you_have_spoken_to_please_tick_all_that_apply,
+        concerns     = which_of_the_following_concerns_were_identified_by_your_conversations,
+        comments     = do_you_have_any_other_comments_about_your_recent_interactions_that_you_would_like_to_share_if_yes_to_question_above_please_elaborate_here_thanks,
+        hours_worked = how_many_hours_of_work_have_you_done_as_a_chaplain_since_you_last_reported
+      )
+
+    # Add response id --------------------------------------------------
+    source_data <- mutate(source_data, response_id = str_c("r_", row_number()), .before = 1)
+
+    # Convert timestamp to DMY hms
+    source_data <- mutate(source_data, timestamp = dmy_hms(timestamp))
+
+    # Add month variable -----------------------------------------------
+    incProgress(15, detail = "processing timestamps...")
+    source_data <-
+        mutate(
+          source_data,
+          month = make_date(year(timestamp), match(month, month.name)),
+          # if this month hadn't started at the time of data collection,
+          # assume we're talking about the nearest preceding month
+          # (A 'December' collection in Jan will be for December last year.)
+          month = if_else(month > timestamp, year_ago(month), month),
+          .after = hub
+        )
+
+    # Convert text into integers (very simply) -----------------------
+    source_data <-
+      mutate(
+        source_data,
+        across(c(n_meaningful, n_general),
+               \(x){
+                 x <-
+                   str_squish(x) |>
+                   str_to_lower() |>
+                   str_remove("$(around |approx |approx\\. |approximately |about )") |>
+                   str_extract("^(\\d+|none|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)")
+
+                 case_match(
+                   x,
+                   "none" ~ "0",
+                   "one" ~ "1", "two"~ "2", "three" ~ "3", "four" ~ "4", "five" ~ "5",
+                   "six" ~ "6", "seven" ~ "7", "eight" ~ "8", "nine" ~ "9", "ten" ~ "10",
+                   "eleven" ~ "11", "twelve" ~ "12", "thirteen" ~ "13", "fourteen" ~ "14",
+                   "fifteen" ~ "15", "sixteen" ~ "16", "seventeen" ~ "17", "eighteen" ~ "18",
+                   "nineteen" ~ "19", "twenty" ~ "20",
+                   .default = x) |>
+                   as.numeric()
+               }))
+
+
+    # Turn hours/minutes into numeric hours value ---------------------
+    get_hours_minutes <- function(x){
+      x[is.na(x)] <- ""
+
+      just_mins <- str_detect(x, "^\\d+ *[Mm]ins|[Mm]inutes$")
+
+      out <-
+        str_extract(x, "(\\d|\\.)+") |>
+        as.numeric()
+
+      out[just_mins] <- out[just_mins]/60
+
+      out
+    }
+
+    source_data <- mutate(source_data, hours_worked = get_hours_minutes(hours_worked))
+
+    ## outputs for page 1: -------------------------------------------------------
+    ## (Evaluated here for timely loading)
+
+    incProgress(15, detail = "calculating 12 month totals...")
+    years_data <- filter(source_data, month >= floor_date(year_ago(), "month"))
+
+    past_year_sum <- function(col){
+      col <- enexpr(col)
+
+      pull(years_data, !!col) |>
+        sum(na.rm = TRUE) |>
+        label_comma()()
+    }
+
+
+    output$total_meaningful <- renderText({past_year_sum(n_meaningful)})
+    output$total_general    <- renderText({past_year_sum(n_general)})
+    output$hours_worked     <- renderText({past_year_sum(hours_worked)})
+
+    # Make 'hub' a factor ----------------------------------------------
+    incProgress(15, detail = "parsing timespan data...")
+    source_data <- mutate(source_data, hub = factor(hub))
+
+    # Make (some) text fields lowercase -------------------------------
+    source_data <- mutate(source_data, across(c(people, concerns), str_to_lower))
+    },
+
+    max = 100, message = "Preparing data") #withProgress
+
 
 
   sheet_data <- reactive({
     withProgress(message = "Processing data", value = 0, max = 100,
                  {
                    # attempt to read sheet --------------------------------------------------------
-                   incProgress(15, detail = "Fetching data")
-
-
-
-                   if(interactive()) sheet_read_backup <- data
-
-                   incProgress(20, detail = "Fetching data")
-
-                   if (is.data.frame(data)) {
-                     data <- clean_names(data)
-
-                     data <- rename(
-                       data,
-                       month        = in_what_month_of_the_year_did_these_conversations_take_place,
-                       hub          = which_hub_are_you_reporting_from,
-                       n_meaningful = how_many_meaningful_conversations_have_you_had_within_the_reporting_period_if_other_please_input_a_whole_number_e_g_12,
-                       n_general    = how_many_general_conversations_have_you_had_within_the_reporting_period_if_other_please_input_a_whole_number_e_g_12,
-                       people       = how_would_you_describe_the_people_you_have_spoken_to_please_tick_all_that_apply,
-                       concerns     = which_of_the_following_concerns_were_identified_by_your_conversations,
-                       comments     = do_you_have_any_other_comments_about_your_recent_interactions_that_you_would_like_to_share_if_yes_to_question_above_please_elaborate_here_thanks,
-                       hours_worked = how_many_hours_of_work_have_you_done_as_a_chaplain_since_you_last_reported
-                     )
-
-                     ## Add month-level date-time marker
-                     data <-
-                       mutate(
-                         data,
-                         month = make_date(year(timestamp), match(month, month.name)),
-                         # if this month hadn't started at the time of data collection,
-                         # assume we're talking about the nearest preceding month
-                         # (A 'December' collection in Jan will be for December last year.)
-                         month = if_else(month > timestamp, year_ago(month), month)
-                       )
-
-                     data <- filter(data, month >= floor_date(month_ago(), "month"))
-
-                     data <-
-                       relocate(data, hub, .after = month) |>
-                       mutate(hub  = factor(hub))
-
-                     ## Make lists into character vectors
-
-                     identity_but_it_coerces_null_to_na <-
-                       function(x){
-                         if(is.null(x)) NA
-                         else x
-                       }
-
-                     data <-
-                       mutate(
-                         data,
-                         across(c(n_meaningful, n_general, hours_worked),
-                                \(x) map_chr(x, \(x) as.character(identity_but_it_coerces_null_to_na(x)))
-                                ))
+                   incProgress(10, detail = "Fetching data")
 
                      ## Tally counts from comma-delimited string columns (widening data) ----------
 
-                     data <- mutate(data, across(c(people, concerns), str_to_lower))
-
-                     get_hours_minutes <- function(x){
-
-                       x[is.na(x)] <- ""
-                       just_mins <- str_detect(x, "^\\d+ *[Mm]ins|[Mm]inutes$")
-
-                       out <-
-                         str_extract(x, "(\\d|\\.)+") |>
-                         as.numeric()
-
-                       out[just_mins] <- out[just_mins]/60
-
-                       out
-                       }
-
-                     data <- mutate(data, hours_worked = get_hours_minutes(hours_worked))
-
-                     incProgress(20, detail = "Fetching data")
-
-
-                     incProgress(25, detail = "Formatting data")
+                     incProgress(25, detail = "Delimiting string fields...")
 
                      data <- tally_delimited_string(
-                       data,
+                       source_data,
                        concerns,
                        keep = c(
                          "financial hardship/benefits",
@@ -325,47 +358,9 @@ server <- function(input, output) {
 
                      data <- rename(data, other_text_concerns = concerns_other_text)
 
-                     data <- mutate(data, response_id = str_c("r_", row_number()))
-
-                     ## Converting conversations to numeric ---------------------------------------
-
-                     data <- mutate(data,
-                                    across(where(is.list),
-                                           \(x) {
-                                             modify_if(x, is.null, \(y) NA) |>
-                                               as.character()
-                                           }))
-
-                     try_number <- function(text){
-                       tryCatch(
-                         to_number(text),
-                         error = \(cnd) text
-                       )
-                     }
-
-                     data <-
-                       rowwise(data) |>
-                       mutate(
-                         across(c(n_meaningful, n_general),
-                                \(x){
-                                  x <-
-                                    str_squish(x) |>
-                                    str_to_lower()
-
-                                  x[x == "none"] <- 0
-
-                                  try_number(x) |>
-                                    str_extract("(\\d|\\.)+") |>
-                                    as.numeric()
-                                })) |>
-                       ungroup()
-
-
-                     incProgress(15, detail = "Finalising")
 
                      data
-                   }
-                 })
+                     })
     })
 
 
@@ -581,37 +576,6 @@ server <- function(input, output) {
       })
 
     dir_delete("tmp")
-  })
-
-  ## outputs for page 1: -------------------------------------------------------
-  output$total_meaningful <- renderText({
-    val <-
-      filter(sheet_data(), month >= floor_date(year_ago(), "month")) |>
-      pull(n_meaningful) |>
-      sum(na.rm = TRUE)
-
-    label_comma()(val) |>
-      as.character()
-  })
-
-  output$total_general <- renderText({
-    val <-
-      filter(sheet_data(), month >= floor_date(year_ago(), "month")) |>
-      pull(n_general) |>
-      sum(na.rm = TRUE)
-
-    label_comma()(val) |>
-      as.character()
-  })
-
-  output$hours_worked <- renderText({
-    val <-
-      filter(sheet_data(), month >= floor_date(year_ago(), "month")) |>
-      pull(hours_worked) |>
-      sum(na.rm = TRUE)
-
-    label_comma()(val) |>
-      as.character()
   })
 
   mainpage_plot_data <- reactive({
