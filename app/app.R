@@ -24,6 +24,8 @@ library(words2number)
 
 #### THIS CODE ALWAYS RUNS #####################################################
 
+busyIndicatorOptions(spinner_type = "ring")
+
 # credentials and authentication -----------------------------------------------
 gs4_deauth()
 
@@ -202,18 +204,26 @@ ui <- fluidPage(
 
 server <- function(input, output) {
 
+  secret_sheet <-
+    "14qI8A51Op2Ri3yfwD1t2AQZ1fxki-KUFb7_EEyvO4Lo"
+
+  data <- tryCatch(
+    read_sheet(secret_sheet),
+    error = identity
+  )
+
+  source_data <-
+
+
   sheet_data <- reactive({
     withProgress(message = "Processing data", value = 0, max = 100,
                  {
                    # attempt to read sheet --------------------------------------------------------
                    incProgress(15, detail = "Fetching data")
 
-                   secret_sheet <-
-                     "14qI8A51Op2Ri3yfwD1t2AQZ1fxki-KUFb7_EEyvO4Lo"
-                   data <- tryCatch(
-                     read_sheet(secret_sheet),
-                     error = identity
-                   )
+
+
+                   if(interactive()) sheet_read_backup <- data
 
                    incProgress(20, detail = "Fetching data")
 
@@ -232,6 +242,19 @@ server <- function(input, output) {
                        hours_worked = how_many_hours_of_work_have_you_done_as_a_chaplain_since_you_last_reported
                      )
 
+                     ## Add month-level date-time marker
+                     data <-
+                       mutate(
+                         data,
+                         month = make_date(year(timestamp), match(month, month.name)),
+                         # if this month hadn't started at the time of data collection,
+                         # assume we're talking about the nearest preceding month
+                         # (A 'December' collection in Jan will be for December last year.)
+                         month = if_else(month > timestamp, year_ago(month), month)
+                       )
+
+                     data <- filter(data, month >= floor_date(month_ago(), "month"))
+
                      data <-
                        relocate(data, hub, .after = month) |>
                        mutate(hub  = factor(hub))
@@ -248,7 +271,7 @@ server <- function(input, output) {
                        mutate(
                          data,
                          across(c(n_meaningful, n_general, hours_worked),
-                                \(x) map_chr(x, identity_but_it_coerces_null_to_na)
+                                \(x) map_chr(x, \(x) as.character(identity_but_it_coerces_null_to_na(x)))
                                 ))
 
                      ## Tally counts from comma-delimited string columns (widening data) ----------
@@ -273,37 +296,6 @@ server <- function(input, output) {
 
                      incProgress(20, detail = "Fetching data")
 
-                     data <- tally_delimited_string(
-                       data,
-                       people,
-                       keep =
-                         str_to_lower(
-                           c(
-                             "Ex HM forces",
-                             "Fisher(wo)men",
-                             "Homeless",
-                             "Leisure hirers/visitors",
-                             "Leisure owners",
-                             "Liveaboards",
-                             "Navigation authority staff or volunteers",
-                             "Towpath users",
-                             "Waterside business staff",
-                             "Waterside residents",
-                             "Boatyards",
-                             "Marina staff",
-                             "Churches and/or church goers",
-                             "Hopsice staff",
-                             "Hospital staff",
-                             "Patients",
-                             "Council staff",
-                             "Boat club",
-                             "Parents and children"
-                           )
-                         ),
-                       other_suffix = "other_text",
-                       other_tally_suffix = "other"
-                     ) |>
-                       rename(people_fisher_men_women = people_fisher_wo_men)
 
                      incProgress(25, detail = "Formatting data")
 
@@ -331,9 +323,7 @@ server <- function(input, output) {
                        other_tally_suffix = "other"
                      )
 
-                     data <- rename(data,
-                                    other_text_people   =  people_other_text,
-                                    other_text_concerns = concerns_other_text)
+                     data <- rename(data, other_text_concerns = concerns_other_text)
 
                      data <- mutate(data, response_id = str_c("r_", row_number()))
 
@@ -373,16 +363,7 @@ server <- function(input, output) {
 
                      incProgress(15, detail = "Finalising")
 
-                     ## Add month-level date-time marker
-                     data <-
-                       mutate(
-                         data,
-                         month = make_date(year(timestamp), match(month, month.name)),
-                         # if this month hadn't started at the time of data collection,
-                         # assume we're talking about the nearest preceding month
-                         # (A 'December' collection in Jan will be for December last year.)
-                         month = if_else(month > timestamp, year_ago(month), month)
-                       )
+                     data
                    }
                  })
     })
@@ -609,7 +590,8 @@ server <- function(input, output) {
       pull(n_meaningful) |>
       sum(na.rm = TRUE)
 
-    label_comma()(val)
+    label_comma()(val) |>
+      as.character()
   })
 
   output$total_general <- renderText({
@@ -618,7 +600,8 @@ server <- function(input, output) {
       pull(n_general) |>
       sum(na.rm = TRUE)
 
-    label_comma()(val)
+    label_comma()(val) |>
+      as.character()
   })
 
   output$hours_worked <- renderText({
@@ -627,7 +610,8 @@ server <- function(input, output) {
       pull(hours_worked) |>
       sum(na.rm = TRUE)
 
-    label_comma()(val)
+    label_comma()(val) |>
+      as.character()
   })
 
   mainpage_plot_data <- reactive({
@@ -806,7 +790,7 @@ server <- function(input, output) {
         labs(x = "Encounters with this issue",
              y = "Conversation topics",
              caption = "Freetext (i.e. 'other') responses are excluded from this graph.\nEncounters are capped at one per chaplain per month to account for differences in reporting.") +
-        theme_ca("black") +
+       theme_ca("black") +
         theme(legend.position = "none",
               text = element_text(size = 28),
               panel.grid.major.y = element_blank(),
@@ -827,26 +811,66 @@ server <- function(input, output) {
 
 
   people_plot_data <- reactive({
+    data <-
     sheet_data() |>
-    pivot_longer(starts_with("people_"),
-                 names_to = "people",
-                 values_to = "indicated") |>
+      select(hub, month, people, email_address) |>
+      filter_hub(input$people_pie_hubs) |>
+      filter_date(input$people_pie_daterange) |>
+
+      tally_delimited_string(
+        people,
+        keep =
+          str_to_lower(
+            c(
+              "Ex HM forces",
+              "Fisher(wo)men",
+              "Homeless",
+              "Leisure hirers/visitors",
+              "Leisure owners",
+              "Liveaboards",
+              "Navigation authority staff or volunteers",
+              "Towpath users",
+              "Waterside business staff",
+              "Waterside residents",
+              "Boatyards",
+              "Marina staff",
+              "Churches and/or church goers",
+              "Hopsice staff",
+              "Hospital staff",
+              "Patients",
+              "Council staff",
+              "Boat club",
+              "Parents and children"
+            )
+          ),
+        other_suffix = "other_text",
+        other_tally_suffix = "other"
+      ) |>
+
+      rename(other_text_people = people_other_text) |>
+
+      pivot_longer(
+        starts_with("people_"),
+        names_to = "people",
+        values_to = "indicated") |>
+
     mutate(people =
              str_remove(people, "people_") |>
              capitalise() |>
              str_replace_all("_", " ") |>
              ordered()) |>
+
     # indicated by a given chaplain in a given month
     summarise(indicated = any(indicated), .by = c(email_address, people, hub, month)) |>
+
       mutate(people = fct_recode(people,
                                `Navigation authority` = "Navigation authority staff or volunteers",
                                `Homeless people` = "Homeless",
                                `Leisure hirers/visitors` = "Leisure hirers visitors",
-                               `Fishermen/women` = "Fisher men women"))
+                               `Fishermen/women` = "Fisher wo men"))
   })
 
   people_choices <- reactive({unique(people_plot_data()$people)})
-
 
   output$people_picker_pie <- renderUI({
     concerns_picker(prefix = "people_pie",
@@ -858,26 +882,25 @@ server <- function(input, output) {
 
   output$people_pie_chart <- renderPlot({
 
-    people_plot_colours <- plot_colours(people_plot_data()$people)
+    pie_data <- people_plot_data()
 
-    dat <-
-      filter_hub(people_plot_data(), input$people_pie_hubs) |>
-      filter_date(input$people_pie_daterange)
+    people_plot_colours <- plot_colours(pie_data$people)
 
-      dat <-
-        mutate(dat,
-               people =
-                 try_fct_other(people, keep = input$people_pie_highlight) |>
-                 fct_relevel("Other", after = Inf))
+    pie_data <-
+      mutate(
+        pie_data,
+        people =
+          try_fct_other(people, keep = input$people_pie_highlight) |>
+          fct_relevel("Other", after = Inf))
 
-    dat <-
-      summarise(dat, count = sum(indicated), .by = c(people)) |>
+    pie_data <-
+      summarise(pie_data, count = sum(indicated), .by = c(people)) |>
       mutate(prop = count/sum(count)) |>
       filter(prop > 0)
 
-    if(nrow(dat) > 0){
+    if(nrow(pie_data) > 0){
 
-      ggplot(dat, aes(x = 1, y = count, fill = people)) +
+      ggplot(pie_data, aes(x = 1, y = count, fill = people)) +
 
       geom_col(width = 0.7, colour = "black") +
 
@@ -914,7 +937,7 @@ server <- function(input, output) {
             plot.subtitle = element_text(size = 20)) +
         ggtitle("Who are we talking to?", subtitle = date_caption(input$people_pie_daterange))
     }
-    else(ggplot)
+    else ggplot()
   })
 
 
