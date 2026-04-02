@@ -387,7 +387,7 @@ server <- function(input, output) {
                  })
     })
 
-  output$hours_worked <- renderText(label_comma()(as.character(round(sum(sheet_data()$hours_worked, na.rm = TRUE)))))
+
 
     ## Adding concern group codes to data ----------------------------------------
 
@@ -609,7 +609,7 @@ server <- function(input, output) {
       pull(n_meaningful) |>
       sum(na.rm = TRUE)
 
-    as.character(label_comma()(val))
+    label_comma()(val)
   })
 
   output$total_general <- renderText({
@@ -618,7 +618,16 @@ server <- function(input, output) {
       pull(n_general) |>
       sum(na.rm = TRUE)
 
-    as.character(label_comma()(val))
+    label_comma()(val)
+  })
+
+  output$hours_worked <- renderText({
+    val <-
+      filter(sheet_data(), month >= floor_date(year_ago(), "month")) |>
+      pull(hours_worked) |>
+      sum(na.rm = TRUE)
+
+    label_comma()(val)
   })
 
   mainpage_plot_data <- reactive({
