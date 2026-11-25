@@ -823,11 +823,13 @@ server <- function(input, output) {
   people_choices <- reactive({unique(people_plot_data()$people)})
 
   output$people_picker_pie <- renderUI({
-    concerns_picker(prefix = "people_pie",
+    isolate({
+      concerns_picker(prefix = "people_pie",
                     choices = people_choices(),
                     width = 2,
                     date_start = month_ago(),
                     hubs = unique(as.character(people_plot_data()[["hub"]])))
+    })
   })
 
   output$people_pie_chart <- renderPlot({
